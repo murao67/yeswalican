@@ -731,15 +731,17 @@ export default function EventApp({ eventId }: { eventId?: string }) {
       <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-[var(--border)]">
         <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
           <div>
-            <h1 className="text-lg font-bold tracking-tight">
-              <span className="text-[var(--accent)]">Yes</span>WaliCan
-            </h1>
+            <a href="/" target="_blank" rel="noopener noreferrer" className="block">
+              <h1 className="text-2xl font-extrabold tracking-tight hover:opacity-80 transition-opacity">
+                <span className="text-[var(--accent)]">Yes</span>WaliCan
+              </h1>
+            </a>
             {eventName ? (
-              <p className="text-[11px] text-[var(--foreground)] font-medium -mt-0.5">
+              <p className="text-xs text-[var(--foreground)] font-medium">
                 {eventName}
               </p>
             ) : (
-              <p className="text-[11px] text-[var(--muted)] -mt-0.5">
+              <p className="text-xs text-[var(--muted)]">
                 立替精算をかんたんに
               </p>
             )}
