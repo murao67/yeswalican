@@ -649,7 +649,7 @@ function BreakdownTable({
         <h3 className="section-label">精算表</h3>
         <div className="flex gap-2">
           <button
-            className="btn-secondary text-xs !px-2.5 !py-1 hidden sm:inline-block"
+            className="btn-secondary text-xs !px-2.5 !py-1"
             onClick={() => setShowModal(true)}
           >
             大きく表示
@@ -730,7 +730,7 @@ function CopySettlementsButton({
   };
   return (
     <button
-      className={`btn-secondary text-xs w-full ${copied ? "!bg-[var(--success)] !text-white !border-[var(--success)]" : ""}`}
+      className={`btn-secondary text-xs w-full hover:!bg-white ${copied ? "!bg-[var(--success)] !text-white !border-[var(--success)]" : ""}`}
       onClick={copy}
     >
       {copied ? "✓ コピーしました" : "テキストでコピー"}
