@@ -577,11 +577,11 @@ function ResultSection({
   );
 }
 
-// --- タブ ---
-const TABS: { id: TabId; label: string; icon: string }[] = [
-  { id: "members", label: "メンバー", icon: "👥" },
-  { id: "expenses", label: "立替", icon: "💰" },
-  { id: "result", label: "精算結果", icon: "📊" },
+// --- ステップ ---
+const STEPS: { id: TabId; label: string; step: number }[] = [
+  { id: "members", label: "メンバー登録", step: 1 },
+  { id: "expenses", label: "立替登録", step: 2 },
+  { id: "result", label: "精算結果", step: 3 },
 ];
 
 // --- メインApp ---
@@ -646,39 +646,69 @@ export default function App() {
           )}
         </div>
 
-        {/* Tabs */}
-        <div className="max-w-lg mx-auto px-4">
-          <nav className="flex">
-            {TABS.map((tab) => (
-              <button
-                key={tab.id}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium border-b-2 transition-all ${
-                  activeTab === tab.id
-                    ? "border-[var(--accent)] text-[var(--accent)]"
-                    : "border-transparent text-[var(--muted)] hover:text-[var(--foreground)]"
-                }`}
-                onClick={() => setActiveTab(tab.id)}
-              >
-                <span className="text-base">{tab.icon}</span>
-                {tab.label}
-                {tab.id === "members" && members.length > 0 && (
-                  <span className="text-[10px] bg-[var(--accent-bg)] text-[var(--accent)] px-1.5 py-0.5 rounded-full">
-                    {members.length}
-                  </span>
-                )}
-                {tab.id === "expenses" && expenses.length > 0 && (
-                  <span className="text-[10px] bg-[var(--accent-bg)] text-[var(--accent)] px-1.5 py-0.5 rounded-full">
-                    {expenses.length}
-                  </span>
-                )}
-              </button>
-            ))}
+        {/* Stepper */}
+        <div className="max-w-lg mx-auto px-6 pt-2 pb-3">
+          <nav className="flex items-center">
+            {STEPS.map((step, i) => {
+              const stepIndex = STEPS.findIndex((s) => s.id === activeTab);
+              const isActive = step.id === activeTab;
+              const isDone = i < stepIndex;
+              const count =
+                step.id === "members"
+                  ? members.length
+                  : step.id === "expenses"
+                  ? expenses.length
+                  : 0;
+              return (
+                <div key={step.id} className="flex items-center flex-1 last:flex-none">
+                  <button
+                    className="flex flex-col items-center gap-1 group"
+                    onClick={() => setActiveTab(step.id)}
+                  >
+                    <span
+                      className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
+                        isActive
+                          ? "bg-[var(--accent)] text-white shadow-md"
+                          : isDone
+                          ? "bg-[var(--accent)] text-white opacity-60"
+                          : "bg-[var(--border)] text-[var(--muted)] group-hover:bg-[var(--accent-bg)] group-hover:text-[var(--accent)]"
+                      }`}
+                    >
+                      {isDone ? "✓" : step.step}
+                    </span>
+                    <span
+                      className={`text-[11px] font-medium whitespace-nowrap transition-colors ${
+                        isActive
+                          ? "text-[var(--accent)]"
+                          : isDone
+                          ? "text-[var(--foreground)]"
+                          : "text-[var(--muted)]"
+                      }`}
+                    >
+                      {step.label}
+                      {count > 0 && (
+                        <span className="ml-1 text-[10px] bg-[var(--accent-bg)] text-[var(--accent)] px-1 py-0.5 rounded-full">
+                          {count}
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                  {i < STEPS.length - 1 && (
+                    <div
+                      className={`flex-1 h-0.5 mx-2 mt-[-18px] rounded transition-colors ${
+                        i < stepIndex ? "bg-[var(--accent)] opacity-60" : "bg-[var(--border)]"
+                      }`}
+                    />
+                  )}
+                </div>
+              );
+            })}
           </nav>
         </div>
       </header>
 
       {/* Main */}
-      <main className="max-w-lg mx-auto px-4 pt-5">
+      <main className="max-w-lg mx-auto px-4 pt-5 space-y-4">
         <div className="card">
           {activeTab === "members" && (
             <MemberSection members={members} setMembers={setMembers} />
@@ -694,6 +724,30 @@ export default function App() {
 
           {activeTab === "result" && (
             <ResultSection members={members} result={result} />
+          )}
+        </div>
+
+        {/* ナビゲーションボタン */}
+        <div className="flex gap-3">
+          {activeTab !== "members" && (
+            <button
+              className="btn-secondary flex-1"
+              onClick={() =>
+                setActiveTab(activeTab === "result" ? "expenses" : "members")
+              }
+            >
+              ← 戻る
+            </button>
+          )}
+          {activeTab !== "result" && (
+            <button
+              className="btn-primary flex-1"
+              onClick={() =>
+                setActiveTab(activeTab === "members" ? "expenses" : "result")
+              }
+            >
+              次へ →
+            </button>
           )}
         </div>
       </main>
