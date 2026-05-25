@@ -189,11 +189,10 @@ function ExpenseSection({
   };
 
   const setCustomAmount = (memberId: string, val: string) => {
-    const num = parseInt(val) || 0;
     setCustomAmounts((prev) => {
       const filtered = prev.filter((c) => c.memberId !== memberId);
-      if (num > 0) return [...filtered, { memberId, amount: num }];
-      return filtered;
+      if (val === "") return filtered; // 空欄 = 自動按分に戻す
+      return [...filtered, { memberId, amount: parseInt(val) || 0 }];
     });
   };
 
@@ -350,9 +349,22 @@ function ExpenseSection({
 
         {useCustom && (
           <div className="space-y-2 bg-[#fffbeb] border border-[#fde68a] rounded-xl p-3 animate-in">
-            <p className="text-xs text-[var(--warning)] font-medium">
-              金額を指定した人は固定額、空欄の人は残額を倍率で按分します
-            </p>
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-[var(--warning)] font-medium">
+                金額を指定した人は固定額、空欄の人は残額を倍率で按分します
+              </p>
+              <button
+                className="btn-secondary text-xs !px-2.5 !py-1 whitespace-nowrap"
+                onClick={() => {
+                  const filled = participantIds
+                    .filter((id) => !customAmounts.some((c) => c.memberId === id))
+                    .map((id) => ({ memberId: id, amount: 0 }));
+                  setCustomAmounts([...customAmounts, ...filled]);
+                }}
+              >
+                空欄に0を入力
+              </button>
+            </div>
             {participantIds.map((id) => (
               <div key={id} className="flex items-center gap-2 text-sm">
                 <span className="w-20 font-medium">{memberName(id)}</span>
