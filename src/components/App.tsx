@@ -31,7 +31,8 @@ function MemberSection({
     setRatio("1");
   };
 
-  const remove = (id: string) => setMembers(members.filter((m) => m.id !== id));
+  const remove = (id: string) =>
+    setMembers(members.filter((m) => m.id !== id));
 
   const updateRatio = (id: string, val: string) => {
     setMembers(
@@ -42,12 +43,18 @@ function MemberSection({
   };
 
   return (
-    <section className="space-y-3">
-      <h2 className="text-lg font-bold">メンバー</h2>
+    <section className="card space-y-4 animate-in">
+      <div className="flex items-center gap-2">
+        <span className="text-xl">👥</span>
+        <div>
+          <h2 className="text-base font-bold">メンバー</h2>
+          <p className="section-label">参加者と負担倍率を設定</p>
+        </div>
+      </div>
       <div className="flex gap-2 flex-wrap">
         <input
           className="input flex-1 min-w-[120px]"
-          placeholder="名前"
+          placeholder="名前を入力"
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && add()}
@@ -65,27 +72,25 @@ function MemberSection({
           追加
         </button>
       </div>
+      <p className="text-xs text-[var(--muted)]">
+        倍率: 大人=1.0、子ども=0.5 など。負担額が倍率に比例します
+      </p>
       {members.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {members.map((m) => (
             <div key={m.id} className="tag">
-              <span>{m.name}</span>
-              {m.ratio !== 1 && (
-                <span className="text-xs text-gray-500">x{m.ratio}</span>
-              )}
+              <span className="font-medium">{m.name}</span>
+              <span className="text-xs text-[var(--muted)]">x</span>
               <input
-                className="w-14 text-xs border rounded px-1 py-0.5"
+                className="w-12 text-xs border border-[var(--border)] rounded-md px-1.5 py-0.5 text-center focus:border-[var(--accent)] outline-none"
                 type="number"
                 step="0.1"
                 min="0.1"
                 value={m.ratio}
                 onChange={(e) => updateRatio(m.id, e.target.value)}
               />
-              <button
-                className="text-red-400 hover:text-red-600 text-sm"
-                onClick={() => remove(m.id)}
-              >
-                x
+              <button className="btn-danger-sm" onClick={() => remove(m.id)}>
+                ✕
               </button>
             </div>
           ))}
@@ -112,7 +117,6 @@ function ExpenseSection({
   const [useCustom, setUseCustom] = useState(false);
   const [customAmounts, setCustomAmounts] = useState<CustomAmount[]>([]);
 
-  // メンバーが変わったら参加者リセット
   useEffect(() => {
     setParticipantIds(members.map((m) => m.id));
     if (!payerId && members.length > 0) setPayerId(members[0].id);
@@ -122,7 +126,6 @@ function ExpenseSection({
     setParticipantIds((prev) =>
       prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]
     );
-    // カスタム額から除外
     if (participantIds.includes(id)) {
       setCustomAmounts((prev) => prev.filter((c) => c.memberId !== id));
     }
@@ -139,7 +142,8 @@ function ExpenseSection({
 
   const add = () => {
     const amt = parseInt(amount);
-    if (!title.trim() || !amt || !payerId || participantIds.length === 0) return;
+    if (!title.trim() || !amt || !payerId || participantIds.length === 0)
+      return;
     setExpenses([
       ...expenses,
       {
@@ -166,109 +170,168 @@ function ExpenseSection({
     members.find((m) => m.id === id)?.name ?? "?";
 
   return (
-    <section className="space-y-3">
-      <h2 className="text-lg font-bold">支払い</h2>
-      <div className="space-y-2">
+    <section className="card space-y-4 animate-in">
+      <div className="flex items-center gap-2">
+        <span className="text-xl">💰</span>
+        <div>
+          <h2 className="text-base font-bold">支払い</h2>
+          <p className="section-label">立替えた支払いを記録</p>
+        </div>
+      </div>
+
+      <div className="space-y-3">
         <div className="flex gap-2 flex-wrap">
           <input
             className="input flex-1 min-w-[120px]"
-            placeholder="タイトル"
+            placeholder="例: 夕食代"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
-          <input
-            className="input w-28"
-            type="number"
-            placeholder="金額"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-          />
-          <select
-            className="input w-28"
-            value={payerId}
-            onChange={(e) => setPayerId(e.target.value)}
-          >
-            {members.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
+          <div className="relative">
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-[var(--muted)]">
+              ¥
+            </span>
+            <input
+              className="input w-28 pl-6"
+              type="number"
+              placeholder="金額"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+          </div>
         </div>
 
-        <div className="text-sm text-gray-600">
-          負担者:
-          <div className="flex flex-wrap gap-1 mt-1">
+        <div>
+          <label className="section-label mb-1.5 block">支払った人</label>
+          <div className="flex flex-wrap gap-1.5">
             {members.map((m) => (
-              <label key={m.id} className="flex items-center gap-1 text-sm">
+              <button
+                key={m.id}
+                className={`text-sm px-3 py-1.5 rounded-lg border transition-all ${
+                  payerId === m.id
+                    ? "bg-[var(--accent)] text-white border-[var(--accent)] shadow-sm"
+                    : "bg-white border-[var(--border)] hover:border-[var(--accent-light)]"
+                }`}
+                onClick={() => setPayerId(m.id)}
+              >
+                {m.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label className="section-label mb-1.5 block">負担する人</label>
+          <div className="flex flex-wrap gap-1.5">
+            {members.map((m) => (
+              <label
+                key={m.id}
+                className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border cursor-pointer transition-all ${
+                  participantIds.includes(m.id)
+                    ? "bg-[var(--accent-bg)] border-[var(--accent-light)]"
+                    : "bg-white border-[var(--border)]"
+                }`}
+              >
                 <input
                   type="checkbox"
                   checked={participantIds.includes(m.id)}
                   onChange={() => toggleParticipant(m.id)}
+                  className="sr-only"
                 />
+                <span
+                  className={`w-4 h-4 rounded border-2 flex items-center justify-center text-xs transition-all ${
+                    participantIds.includes(m.id)
+                      ? "bg-[var(--accent)] border-[var(--accent)] text-white"
+                      : "border-[var(--border)]"
+                  }`}
+                >
+                  {participantIds.includes(m.id) && "✓"}
+                </span>
                 {m.name}
               </label>
             ))}
           </div>
         </div>
 
-        <label className="flex items-center gap-1 text-sm text-gray-600">
-          <input
-            type="checkbox"
-            checked={useCustom}
-            onChange={(e) => setUseCustom(e.target.checked)}
-          />
-          個別に負担額を指定
-        </label>
+        <div>
+          <label className="flex items-center gap-2 text-sm cursor-pointer text-[var(--muted)] hover:text-[var(--foreground)] transition-colors">
+            <input
+              type="checkbox"
+              checked={useCustom}
+              onChange={(e) => setUseCustom(e.target.checked)}
+              className="sr-only"
+            />
+            <span
+              className={`w-9 h-5 rounded-full relative transition-all ${
+                useCustom ? "bg-[var(--accent)]" : "bg-[var(--border)]"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${
+                  useCustom ? "left-4" : "left-0.5"
+                }`}
+              />
+            </span>
+            個別に負担額を指定する
+          </label>
+        </div>
 
         {useCustom && (
-          <div className="space-y-1 pl-2">
+          <div className="space-y-2 bg-[#fffbeb] border border-[#fde68a] rounded-xl p-3 animate-in">
+            <p className="text-xs text-[var(--warning)] font-medium">
+              金額を指定した人は固定額、空欄の人は残額を倍率で按分します
+            </p>
             {participantIds.map((id) => (
               <div key={id} className="flex items-center gap-2 text-sm">
-                <span className="w-20">{memberName(id)}</span>
-                <input
-                  className="input w-24"
-                  type="number"
-                  placeholder="未指定=按分"
-                  value={
-                    customAmounts.find((c) => c.memberId === id)?.amount ?? ""
-                  }
-                  onChange={(e) => setCustomAmount(id, e.target.value)}
-                />
-                <span className="text-xs text-gray-400">
-                  空欄=残額を倍率按分
-                </span>
+                <span className="w-20 font-medium">{memberName(id)}</span>
+                <div className="relative">
+                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-[var(--muted)]">
+                    ¥
+                  </span>
+                  <input
+                    className="input w-28 pl-5 text-sm"
+                    type="number"
+                    placeholder="自動按分"
+                    value={
+                      customAmounts.find((c) => c.memberId === id)?.amount ?? ""
+                    }
+                    onChange={(e) => setCustomAmount(id, e.target.value)}
+                  />
+                </div>
               </div>
             ))}
           </div>
         )}
 
-        <button className="btn-primary" onClick={add}>
-          追加
+        <button className="btn-primary w-full" onClick={add}>
+          + 支払いを追加
         </button>
       </div>
 
       {expenses.length > 0 && (
-        <div className="space-y-1">
+        <div className="space-y-2">
           {expenses.map((e) => (
-            <div
-              key={e.id}
-              className="flex items-center justify-between bg-gray-50 rounded px-3 py-2 text-sm"
-            >
+            <div key={e.id} className="expense-item animate-in">
               <div>
                 <span className="font-medium">{e.title}</span>
-                <span className="text-gray-500 ml-2">
-                  ¥{e.amount.toLocaleString()} ({memberName(e.payerId)}払い)
+                <span className="text-[var(--muted)] text-sm ml-2">
+                  ¥{e.amount.toLocaleString()}
+                </span>
+                <span className="text-xs text-[var(--muted)] ml-1.5 bg-[var(--background)] px-1.5 py-0.5 rounded">
+                  {memberName(e.payerId)} が支払い
                 </span>
               </div>
-              <button
-                className="text-red-400 hover:text-red-600"
-                onClick={() => remove(e.id)}
-              >
-                削除
+              <button className="btn-danger-sm" onClick={() => remove(e.id)}>
+                ✕
               </button>
             </div>
           ))}
+          <div className="text-right text-sm font-medium text-[var(--muted)] pt-1">
+            合計: ¥
+            {expenses
+              .reduce((s, e) => s + e.amount, 0)
+              .toLocaleString()}
+          </div>
         </div>
       )}
     </section>
@@ -284,127 +347,156 @@ function ResultSection({
   result: CalcResult;
 }) {
   const name = (id: string) => members.find((m) => m.id === id)?.name ?? "?";
-  const ratio = (id: string) => members.find((m) => m.id === id)?.ratio ?? 1;
 
   return (
-    <section className="space-y-4">
-      <h2 className="text-lg font-bold">精算結果</h2>
+    <section className="card space-y-5 animate-in">
+      <div className="flex items-center gap-2">
+        <span className="text-xl">📊</span>
+        <div>
+          <h2 className="text-base font-bold">精算結果</h2>
+          <p className="section-label">誰が誰にいくら払うか</p>
+        </div>
+      </div>
 
-      {/* 精算アクション */}
+      {/* 送金リスト */}
       {result.settlements.length > 0 ? (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
-          <h3 className="font-bold text-blue-800">送金リスト</h3>
+        <div className="space-y-2">
           {result.settlements.map((s, i) => (
-            <div key={i} className="text-sm">
-              <span className="font-medium">{name(s.fromId)}</span>
-              <span className="mx-1">→</span>
-              <span className="font-medium">{name(s.toId)}</span>
-              <span className="ml-2 font-bold">
+            <div key={i} className="settlement-card animate-in">
+              <span className="font-semibold">{name(s.fromId)}</span>
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 20 20"
+                fill="none"
+                className="text-[var(--accent)] shrink-0"
+              >
+                <path
+                  d="M4 10h12m0 0l-4-4m4 4l-4 4"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              <span className="font-semibold">{name(s.toId)}</span>
+              <span className="ml-auto text-lg font-bold text-[var(--accent)]">
                 ¥{s.amount.toLocaleString()}
               </span>
             </div>
           ))}
         </div>
       ) : (
-        <p className="text-gray-500 text-sm">精算は不要です</p>
+        <div className="text-center py-4 text-[var(--muted)] text-sm">
+          精算は不要です
+        </div>
       )}
 
       {/* 計算過程テーブル */}
-      <div className="overflow-x-auto">
-        <h3 className="font-bold text-sm mb-2">計算過程</h3>
-        <table className="w-full text-sm border-collapse">
-          <thead>
-            <tr className="bg-gray-100">
-              <th className="border px-2 py-1 text-left">支出</th>
-              <th className="border px-2 py-1 text-right">合計</th>
-              {members.map((m) => (
-                <th key={m.id} className="border px-2 py-1 text-right">
-                  {m.name}
-                  {m.ratio !== 1 && (
-                    <span className="text-xs text-gray-400 block">
-                      x{m.ratio}
-                    </span>
-                  )}
-                </th>
+      <div>
+        <h3 className="section-label mb-2">計算過程</h3>
+        <div className="overflow-x-auto -mx-1.5">
+          <table className="result-table">
+            <thead>
+              <tr>
+                <th className="!text-left">支出</th>
+                <th>合計</th>
+                {members.map((m) => (
+                  <th key={m.id}>
+                    <span className="block">{m.name}</span>
+                    {m.ratio !== 1 && (
+                      <span className="text-[10px] font-normal text-[var(--muted)]">
+                        x{m.ratio}
+                      </span>
+                    )}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {result.breakdowns.map((b) => (
+                <tr key={b.expense.id}>
+                  <td>
+                    <div className="font-medium">{b.expense.title}</div>
+                    <div className="text-[11px] text-[var(--muted)]">
+                      {name(b.expense.payerId)} が支払い
+                    </div>
+                  </td>
+                  <td className="font-medium">
+                    ¥{b.expense.amount.toLocaleString()}
+                  </td>
+                  {members.map((m) => {
+                    const amt = b.amounts[m.id];
+                    const isCustom = b.expense.customAmounts.some(
+                      (c) => c.memberId === m.id
+                    );
+                    return (
+                      <td
+                        key={m.id}
+                        className={isCustom ? "!bg-[#fffbeb]" : ""}
+                      >
+                        {amt != null ? (
+                          <span>
+                            ¥{amt.toLocaleString()}
+                            {isCustom && (
+                              <span className="text-[10px] text-[var(--warning)] ml-0.5">
+                                *
+                              </span>
+                            )}
+                          </span>
+                        ) : (
+                          <span className="text-[var(--muted)]">-</span>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
               ))}
-            </tr>
-          </thead>
-          <tbody>
-            {result.breakdowns.map((b) => (
-              <tr key={b.expense.id}>
-                <td className="border px-2 py-1">
-                  {b.expense.title}
-                  <span className="text-xs text-gray-400 ml-1">
-                    ({name(b.expense.payerId)}払)
-                  </span>
-                </td>
-                <td className="border px-2 py-1 text-right">
-                  ¥{b.expense.amount.toLocaleString()}
-                </td>
+              <tr className="row-summary">
+                <td>負担合計</td>
+                <td></td>
+                {members.map((m) => (
+                  <td key={m.id}>
+                    ¥{(result.totalBurden[m.id] ?? 0).toLocaleString()}
+                  </td>
+                ))}
+              </tr>
+              <tr className="row-summary">
+                <td>支払済</td>
+                <td></td>
+                {members.map((m) => (
+                  <td key={m.id}>
+                    ¥{(result.totalPaid[m.id] ?? 0).toLocaleString()}
+                  </td>
+                ))}
+              </tr>
+              <tr className="row-balance">
+                <td>差額</td>
+                <td></td>
                 {members.map((m) => {
-                  const amt = b.amounts[m.id];
-                  const isCustom = b.expense.customAmounts.some(
-                    (c) => c.memberId === m.id
-                  );
+                  const bal = result.balance[m.id] ?? 0;
                   return (
                     <td
                       key={m.id}
-                      className={`border px-2 py-1 text-right ${
-                        isCustom ? "bg-yellow-50" : ""
-                      }`}
+                      className={
+                        bal > 0
+                          ? "!text-[var(--success)]"
+                          : bal < 0
+                          ? "!text-[var(--danger)]"
+                          : ""
+                      }
                     >
-                      {amt != null ? `¥${amt.toLocaleString()}` : "-"}
+                      {bal >= 0 ? "+" : ""}¥{bal.toLocaleString()}
                     </td>
                   );
                 })}
               </tr>
-            ))}
-            {/* 負担合計 */}
-            <tr className="bg-gray-50 font-medium">
-              <td className="border px-2 py-1">負担合計</td>
-              <td className="border px-2 py-1"></td>
-              {members.map((m) => (
-                <td key={m.id} className="border px-2 py-1 text-right">
-                  ¥{(result.totalBurden[m.id] ?? 0).toLocaleString()}
-                </td>
-              ))}
-            </tr>
-            {/* 支払合計 */}
-            <tr className="bg-gray-50 font-medium">
-              <td className="border px-2 py-1">支払済</td>
-              <td className="border px-2 py-1"></td>
-              {members.map((m) => (
-                <td key={m.id} className="border px-2 py-1 text-right">
-                  ¥{(result.totalPaid[m.id] ?? 0).toLocaleString()}
-                </td>
-              ))}
-            </tr>
-            {/* 差額 */}
-            <tr className="font-bold">
-              <td className="border px-2 py-1">差額</td>
-              <td className="border px-2 py-1"></td>
-              {members.map((m) => {
-                const bal = result.balance[m.id] ?? 0;
-                return (
-                  <td
-                    key={m.id}
-                    className={`border px-2 py-1 text-right ${
-                      bal > 0
-                        ? "text-green-600"
-                        : bal < 0
-                        ? "text-red-600"
-                        : ""
-                    }`}
-                  >
-                    {bal >= 0 ? "+" : ""}¥{bal.toLocaleString()}
-                  </td>
-                );
-              })}
-            </tr>
-          </tbody>
-        </table>
-        <p className="text-xs text-gray-400 mt-1">
-          黄色セル = 個別指定額、それ以外は倍率に基づく按分
+            </tbody>
+          </table>
+        </div>
+        <p className="text-[11px] text-[var(--muted)] mt-2">
+          <span className="inline-block w-2 h-2 bg-[#fffbeb] border border-[#fde68a] rounded-sm mr-1" />
+          * = 個別指定額 / それ以外は倍率に基づく自動按分
         </p>
       </div>
     </section>
@@ -415,10 +507,8 @@ function ResultSection({
 export default function App() {
   const [members, setMembers] = useState<Member[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [shareUrl, setShareUrl] = useState("");
   const [copied, setCopied] = useState(false);
 
-  // URL からデータ復元
   useEffect(() => {
     const hash = window.location.hash.slice(1);
     if (hash) {
@@ -439,44 +529,69 @@ export default function App() {
   const share = useCallback(() => {
     const encoded = encodeData(data);
     const url = `${window.location.origin}${window.location.pathname}#${encoded}`;
-    setShareUrl(url);
     navigator.clipboard.writeText(url).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
+    // URLバーも更新
+    window.history.replaceState(null, "", `#${encoded}`);
   }, [data]);
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8 space-y-8">
-      <header>
-        <h1 className="text-2xl font-bold">YesWaliCan</h1>
-        <p className="text-sm text-gray-500">
-          立替払い精算アプリ - 倍率・個別負担額に対応
-        </p>
+    <div className="min-h-screen pb-12">
+      {/* Header */}
+      <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-[var(--border)]">
+        <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
+          <div>
+            <h1 className="text-lg font-bold tracking-tight">
+              <span className="text-[var(--accent)]">Yes</span>WaliCan
+            </h1>
+            <p className="text-[11px] text-[var(--muted)] -mt-0.5">
+              立替精算をかんたんに
+            </p>
+          </div>
+          {(members.length > 0 || expenses.length > 0) && (
+            <button
+              className={`text-sm px-3 py-1.5 rounded-lg border transition-all ${
+                copied
+                  ? "bg-[var(--success)] text-white border-[var(--success)]"
+                  : "border-[var(--border)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
+              }`}
+              onClick={share}
+            >
+              {copied ? "✓ コピー!" : "🔗 共有"}
+            </button>
+          )}
+        </div>
       </header>
 
-      <MemberSection members={members} setMembers={setMembers} />
+      {/* Main */}
+      <main className="max-w-lg mx-auto px-4 pt-6 space-y-5">
+        <MemberSection members={members} setMembers={setMembers} />
 
-      {members.length >= 2 && (
-        <ExpenseSection
-          members={members}
-          expenses={expenses}
-          setExpenses={setExpenses}
-        />
-      )}
+        {members.length >= 2 && (
+          <ExpenseSection
+            members={members}
+            expenses={expenses}
+            setExpenses={setExpenses}
+          />
+        )}
 
-      {result && <ResultSection members={members} result={result} />}
+        {result && <ResultSection members={members} result={result} />}
 
-      {(members.length > 0 || expenses.length > 0) && (
-        <section className="space-y-2">
-          <button className="btn-secondary" onClick={share}>
-            {copied ? "コピーしました!" : "共有URLをコピー"}
-          </button>
-          {shareUrl && (
-            <p className="text-xs text-gray-400 break-all">{shareUrl}</p>
-          )}
-        </section>
-      )}
+        {members.length === 0 && (
+          <div className="text-center py-12 text-[var(--muted)] space-y-2">
+            <div className="text-4xl">👆</div>
+            <p className="text-sm">まずメンバーを2人以上追加してください</p>
+          </div>
+        )}
+
+        {members.length === 1 && (
+          <div className="text-center py-8 text-[var(--muted)] space-y-2">
+            <p className="text-sm">もう1人メンバーを追加してください</p>
+          </div>
+        )}
+      </main>
     </div>
   );
 }
