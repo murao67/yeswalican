@@ -467,7 +467,7 @@ function ExpenseSection({
   );
 }
 
-// --- 計算過程テーブル ---
+// --- 精算表テーブル ---
 function BreakdownTableInner({
   members,
   result,
@@ -646,7 +646,7 @@ function BreakdownTable({
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <h3 className="section-label">計算過程</h3>
+        <h3 className="section-label">精算表</h3>
         <div className="flex gap-2">
           <button
             className="btn-secondary text-xs !px-2.5 !py-1 hidden sm:inline-block"
@@ -685,7 +685,7 @@ function BreakdownTable({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-base">計算過程</h3>
+              <h3 className="font-bold text-base">精算表</h3>
               <button
                 className="btn-secondary text-sm !px-3 !py-1"
                 onClick={() => setShowModal(false)}
