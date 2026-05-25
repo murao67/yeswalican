@@ -13,6 +13,7 @@ import {
   downloadCSV,
   readCSVFile,
 } from "@/lib/csv";
+import DisclaimerFooter from "./DisclaimerFooter";
 
 function genId() {
   return Math.random().toString(36).slice(2, 9);
@@ -1209,6 +1210,8 @@ export default function EventApp({ eventId }: { eventId?: string }) {
           )}
         </div>
       </main>
+
+      <DisclaimerFooter />
     </div>
   );
 }
