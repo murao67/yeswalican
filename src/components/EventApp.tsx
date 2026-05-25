@@ -488,8 +488,16 @@ function BreakdownTableInner({
     <table className="result-table">
       <thead>
         <tr>
-          <th className="!text-left">支出</th>
-          <th>合計</th>
+          <th className="!text-left" rowSpan={2}>支出</th>
+          <th rowSpan={2}>合計</th>
+          <th
+            colSpan={members.length}
+            className="!text-center text-xs font-bold text-[var(--accent)]"
+          >
+            あるべき負担額
+          </th>
+        </tr>
+        <tr>
           {members.map((m) => (
             <th key={m.id} className={full ? "" : "max-w-[60px]"}>
               <span className="block truncate" title={m.name}>
@@ -543,7 +551,7 @@ function BreakdownTableInner({
           </tr>
         ))}
         <tr className="row-summary">
-          <td>あるべき負担</td>
+          <td>合計</td>
           <td></td>
           {members.map((m) => (
             <td key={m.id}>
@@ -725,7 +733,7 @@ function ResultSection({
       ...members.map((m) => String(b.amounts[m.id] ?? "")),
     ]);
     rows.push([
-      "あるべき負担", "", "",
+      "合計", "", "",
       ...members.map((m) => String(result.totalBurden[m.id] ?? 0)),
     ]);
     rows.push([
