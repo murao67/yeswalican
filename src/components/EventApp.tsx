@@ -1025,7 +1025,7 @@ export default function EventApp({ eventId }: { eventId?: string }) {
   }
 
   return (
-    <div className="min-h-screen pb-12">
+    <div className="min-h-screen flex flex-col">
       {/* Header */}
       <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-[var(--border)]">
         <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
@@ -1150,7 +1150,7 @@ export default function EventApp({ eventId }: { eventId?: string }) {
       </header>
 
       {/* Main */}
-      <main className="max-w-lg mx-auto px-4 pt-5 space-y-4">
+      <main className="max-w-lg mx-auto w-full px-4 pt-5 space-y-4 flex-1">
         <div className="card">
           {activeTab === "settings" && (
             <SettingsSection

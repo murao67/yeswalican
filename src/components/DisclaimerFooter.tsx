@@ -7,7 +7,7 @@ export default function DisclaimerFooter() {
 
   return (
     <>
-      <footer className="max-w-lg mx-auto px-4 pt-8 pb-6 text-center text-xs text-[var(--muted)]">
+      <footer className="max-w-lg mx-auto w-full px-4 pt-8 pb-6 text-center text-xs text-[var(--muted)]">
         <button
           className="hover:text-[var(--accent)] transition-colors underline-offset-2 hover:underline"
           onClick={() => setShow(true)}
