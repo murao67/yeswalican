@@ -174,6 +174,7 @@ function ExpenseSection({
   expenses: Expense[];
   setExpenses: (e: Expense[]) => void;
 }) {
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
   const [payerId, setPayerId] = useState("");
@@ -182,9 +183,11 @@ function ExpenseSection({
   const [customAmounts, setCustomAmounts] = useState<CustomAmount[]>([]);
 
   useEffect(() => {
-    setParticipantIds(members.map((m) => m.id));
+    if (!editingId) {
+      setParticipantIds(members.map((m) => m.id));
+    }
     if (!payerId && members.length > 0) setPayerId(members[0].id);
-  }, [members, payerId]);
+  }, [members, payerId, editingId]);
 
   const toggleParticipant = (id: string) => {
     setParticipantIds((prev) =>
@@ -203,31 +206,52 @@ function ExpenseSection({
     });
   };
 
-  const add = () => {
-    const amt = parseInt(amount);
-    if (!title.trim() || !amt || !payerId || participantIds.length === 0)
-      return;
-    setExpenses([
-      ...expenses,
-      {
-        id: genId(),
-        title: title.trim(),
-        amount: amt,
-        payerId,
-        participantIds: [...participantIds],
-        customAmounts: customAmounts.filter((c) =>
-          participantIds.includes(c.memberId)
-        ),
-      },
-    ]);
+  const resetForm = () => {
+    setEditingId(null);
     setTitle("");
     setAmount("");
     setUseCustom(false);
     setCustomAmounts([]);
+    setParticipantIds(members.map((m) => m.id));
+    if (members.length > 0) setPayerId(members[0].id);
   };
 
-  const remove = (id: string) =>
+  const save = () => {
+    const amt = parseInt(amount);
+    if (!title.trim() || !amt || !payerId || participantIds.length === 0)
+      return;
+    const entry: Expense = {
+      id: editingId ?? genId(),
+      title: title.trim(),
+      amount: amt,
+      payerId,
+      participantIds: [...participantIds],
+      customAmounts: customAmounts.filter((c) =>
+        participantIds.includes(c.memberId)
+      ),
+    };
+    if (editingId) {
+      setExpenses(expenses.map((e) => (e.id === editingId ? entry : e)));
+    } else {
+      setExpenses([...expenses, entry]);
+    }
+    resetForm();
+  };
+
+  const startEdit = (e: Expense) => {
+    setEditingId(e.id);
+    setTitle(e.title);
+    setAmount(String(e.amount));
+    setPayerId(e.payerId);
+    setParticipantIds([...e.participantIds]);
+    setCustomAmounts([...e.customAmounts]);
+    setUseCustom(e.customAmounts.length > 0);
+  };
+
+  const remove = (id: string) => {
     setExpenses(expenses.filter((e) => e.id !== id));
+    if (editingId === id) resetForm();
+  };
 
   const memberName = (id: string) =>
     members.find((m) => m.id === id)?.name ?? "?";
@@ -393,16 +417,28 @@ function ExpenseSection({
             </div>
           )}
 
-          <button className="btn-primary w-full" onClick={add}>
-            + 立替を追加
-          </button>
+          <div className="flex gap-2">
+            {editingId && (
+              <button className="btn-secondary flex-1" onClick={resetForm}>
+                キャンセル
+              </button>
+            )}
+            <button className="btn-primary flex-1" onClick={save}>
+              {editingId ? "更新する" : "+ 立替を追加"}
+            </button>
+          </div>
         </div>
       )}
 
       {expenses.length > 0 && (
         <div className="space-y-2">
           {expenses.map((e) => (
-            <div key={e.id} className="expense-item animate-in">
+            <div
+              key={e.id}
+              className={`expense-item animate-in ${
+                editingId === e.id ? "!border-[var(--accent)]" : ""
+              }`}
+            >
               <div>
                 <span className="font-medium">{e.title}</span>
                 <span className="text-[var(--muted)] text-sm ml-2">
@@ -412,9 +448,17 @@ function ExpenseSection({
                   {memberName(e.payerId)} が支払い
                 </span>
               </div>
-              <button className="btn-danger-sm" onClick={() => remove(e.id)}>
-                ✕
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  className="btn-danger-sm !text-[var(--accent)]"
+                  onClick={() => startEdit(e)}
+                >
+                  編集
+                </button>
+                <button className="btn-danger-sm" onClick={() => remove(e.id)}>
+                  ✕
+                </button>
+              </div>
             </div>
           ))}
           <div className="text-right text-sm font-medium text-[var(--muted)] pt-1">
