@@ -4,12 +4,55 @@ import { useState, useEffect, useCallback } from "react";
 import { Member, Expense, AppData, CustomAmount } from "@/lib/types";
 import { calculate, CalcResult } from "@/lib/calc";
 import { encodeData, decodeData } from "@/lib/url";
+import {
+  membersToCSV,
+  csvToMembers,
+  expensesToCSV,
+  csvToExpenses,
+  downloadCSV,
+  readCSVFile,
+} from "@/lib/csv";
 
 function genId() {
   return Math.random().toString(36).slice(2, 9);
 }
 
 // --- メンバー管理 ---
+function CSVButtons({
+  onExport,
+  onImport,
+  exportDisabled,
+}: {
+  onExport: () => void;
+  onImport: (file: File) => void;
+  exportDisabled?: boolean;
+}) {
+  return (
+    <div className="flex gap-2">
+      <button
+        className="btn-secondary text-xs !px-2.5 !py-1"
+        onClick={onExport}
+        disabled={exportDisabled}
+      >
+        CSV出力
+      </button>
+      <label className="btn-secondary text-xs !px-2.5 !py-1 cursor-pointer">
+        CSV読込
+        <input
+          type="file"
+          accept=".csv,.txt"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) onImport(f);
+            e.target.value = "";
+          }}
+        />
+      </label>
+    </div>
+  );
+}
+
 function MemberSection({
   members,
   setMembers,
@@ -42,14 +85,28 @@ function MemberSection({
     );
   };
 
+  const handleExport = () => downloadCSV(membersToCSV(members), "members.csv");
+  const handleImport = async (file: File) => {
+    const csv = await readCSVFile(file);
+    const imported = csvToMembers(csv, genId);
+    if (imported.length > 0) setMembers([...members, ...imported]);
+  };
+
   return (
     <section className="card space-y-4 animate-in">
-      <div className="flex items-center gap-2">
-        <span className="text-xl">👥</span>
-        <div>
-          <h2 className="text-base font-bold">メンバー</h2>
-          <p className="section-label">参加者と負担倍率を設定</p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-xl">👥</span>
+          <div>
+            <h2 className="text-base font-bold">メンバー</h2>
+            <p className="section-label">参加者と負担倍率を設定</p>
+          </div>
         </div>
+        <CSVButtons
+          onExport={handleExport}
+          onImport={handleImport}
+          exportDisabled={members.length === 0}
+        />
       </div>
       <div className="flex gap-2 flex-wrap">
         <input
@@ -169,14 +226,29 @@ function ExpenseSection({
   const memberName = (id: string) =>
     members.find((m) => m.id === id)?.name ?? "?";
 
+  const handleExport = () =>
+    downloadCSV(expensesToCSV(expenses, members), "expenses.csv");
+  const handleImport = async (file: File) => {
+    const csv = await readCSVFile(file);
+    const imported = csvToExpenses(csv, members, genId);
+    if (imported.length > 0) setExpenses([...expenses, ...imported]);
+  };
+
   return (
     <section className="card space-y-4 animate-in">
-      <div className="flex items-center gap-2">
-        <span className="text-xl">💰</span>
-        <div>
-          <h2 className="text-base font-bold">支払い</h2>
-          <p className="section-label">立替えた支払いを記録</p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-xl">💰</span>
+          <div>
+            <h2 className="text-base font-bold">支払い</h2>
+            <p className="section-label">立替えた支払いを記録</p>
+          </div>
         </div>
+        <CSVButtons
+          onExport={handleExport}
+          onImport={handleImport}
+          exportDisabled={expenses.length === 0}
+        />
       </div>
 
       <div className="space-y-3">
