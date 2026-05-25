@@ -971,17 +971,27 @@ export default function EventApp({ eventId }: { eventId?: string }) {
               </p>
             )}
           </div>
-          <button
-            className={`text-sm px-3 py-1.5 rounded-lg border transition-all ${
-              copied
-                ? "bg-[var(--success)] text-white border-[var(--success)]"
-                : "border-[var(--border)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
-            }`}
-            disabled={saving}
-            onClick={saveAndCopyUrl}
-          >
-            {copied ? "✓ コピー!" : saving ? "保存中..." : "🔗 保存してURLをコピー"}
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              className={`text-sm px-3 py-1.5 rounded-lg border transition-all ${
+                copied
+                  ? "bg-[var(--success)] text-white border-[var(--success)]"
+                  : "border-[var(--border)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
+              }`}
+              disabled={saving}
+              onClick={saveAndCopyUrl}
+            >
+              {copied ? "✓ コピー!" : saving ? "保存中..." : "🔗 保存してURLをコピー"}
+            </button>
+            <span className="relative group">
+              <span className="w-5 h-5 rounded-full bg-[var(--border)] text-[var(--muted)] text-xs flex items-center justify-center cursor-help">
+                ?
+              </span>
+              <span className="absolute right-0 top-7 w-52 bg-[var(--foreground)] text-white text-xs rounded-lg px-3 py-2 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-20 leading-relaxed">
+                保存するとイベント固有のURLが発行されます
+              </span>
+            </span>
+          </div>
         </div>
 
         {/* Step tabs */}
