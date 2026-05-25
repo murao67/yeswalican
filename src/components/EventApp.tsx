@@ -714,15 +714,18 @@ function BreakdownTable({
 function CopySettlementsButton({
   settlements,
   name,
+  eventUrl,
 }: {
   settlements: { fromId: string; toId: string; amount: number }[];
   name: (id: string) => string;
+  eventUrl?: string;
 }) {
   const [copied, setCopied] = useState(false);
   const copy = () => {
-    const text = settlements
-      .map((s) => `${name(s.fromId)} → ${name(s.toId)}: ¥${s.amount.toLocaleString()}`)
-      .join("\n");
+    const lines = settlements
+      .map((s) => `${name(s.fromId)} → ${name(s.toId)}: ¥${s.amount.toLocaleString()}`);
+    if (eventUrl) lines.push("", eventUrl);
+    const text = lines.join("\n");
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -741,9 +744,11 @@ function CopySettlementsButton({
 function ResultSection({
   members,
   result,
+  eventUrl,
 }: {
   members: Member[];
   result: CalcResult | null;
+  eventUrl?: string;
 }) {
   const name = (id: string) => members.find((m) => m.id === id)?.name ?? "?";
 
@@ -839,7 +844,7 @@ function ResultSection({
               </span>
             </div>
           ))}
-          <CopySettlementsButton settlements={result.settlements} name={name} />
+          <CopySettlementsButton settlements={result.settlements} name={name} eventUrl={eventUrl} />
         </div>
       ) : (
         <div className="text-center py-4 text-[var(--muted)] text-sm">
@@ -871,7 +876,14 @@ export default function EventApp({ eventId }: { eventId?: string }) {
   const [eventName, setEventName] = useState("");
   const [members, setMembers] = useState<Member[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [activeTab, setActiveTab] = useState<TabId>("settings");
+  const [activeTab, setActiveTab] = useState<TabId>(() => {
+    if (typeof window !== "undefined") {
+      const hash = window.location.hash.replace("#", "");
+      if (hash === "settings" || hash === "expenses" || hash === "result")
+        return hash;
+    }
+    return "settings";
+  });
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(!!eventId);
   const [copied, setCopied] = useState(false);
@@ -1042,7 +1054,7 @@ export default function EventApp({ eventId }: { eventId?: string }) {
           )}
 
           {activeTab === "result" && (
-            <ResultSection members={members} result={result} />
+            <ResultSection members={members} result={result} eventUrl={id ? `${typeof window !== "undefined" ? window.location.origin : ""}/e/${id}#result` : undefined} />
           )}
         </div>
 
