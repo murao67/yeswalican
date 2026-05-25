@@ -105,7 +105,7 @@ function MemberSection({
         <CSVButtons
           onExport={handleExport}
           onImport={handleImport}
-          exportDisabled={members.length === 0}
+          exportDisabled={false}
         />
       </div>
       <div className="flex gap-2 flex-wrap">
@@ -247,7 +247,7 @@ function ExpenseSection({
         <CSVButtons
           onExport={handleExport}
           onImport={handleImport}
-          exportDisabled={expenses.length === 0}
+          exportDisabled={false}
         />
       </div>
 
