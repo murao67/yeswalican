@@ -140,10 +140,10 @@ function SettingsSection({
         倍率: 大人=1.0、子ども=0.5 など。負担額が倍率に比例します
       </p>
       {members.length > 0 && (
-        <div className="flex flex-wrap gap-2">
+        <div className="space-y-2">
           {members.map((m) => (
             <div key={m.id} className="tag">
-              <span className="font-medium">{m.name}</span>
+              <span className="font-medium flex-1">{m.name}</span>
               <span className="text-xs text-[var(--muted)]">x</span>
               <input
                 className="w-12 text-xs border border-[var(--border)] rounded-md px-1.5 py-0.5 text-center focus:border-[var(--accent)] outline-none"
