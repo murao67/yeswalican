@@ -98,12 +98,18 @@ body {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 0.25rem;
+  padding: 0.5rem 0.625rem;
   border-radius: 0.375rem;
   transition: all 0.15s;
   font-size: 0.75rem;
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.btn-danger-sm:hover {
+.btn-danger-sm:hover,
+.btn-danger-sm:active {
   color: var(--danger);
   background: #fef2f2;
 }
