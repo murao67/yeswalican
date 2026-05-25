@@ -590,9 +590,9 @@ function BreakdownTableInner({
             {members.map((m) => (
               <td key={m.id}>
                 {m.id === s.fromId
-                  ? `−¥${s.amount.toLocaleString()}`
-                  : m.id === s.toId
                   ? `+¥${s.amount.toLocaleString()}`
+                  : m.id === s.toId
+                  ? `−¥${s.amount.toLocaleString()}`
                   : ""}
               </td>
             ))}
@@ -605,8 +605,8 @@ function BreakdownTableInner({
             {members.map((m) => {
               const bal = result.balance[m.id] ?? 0;
               const adj = result.settlements.reduce((sum, s) => {
-                if (s.fromId === m.id) return sum - s.amount;
-                if (s.toId === m.id) return sum + s.amount;
+                if (s.fromId === m.id) return sum + s.amount;
+                if (s.toId === m.id) return sum - s.amount;
                 return sum;
               }, 0);
               return (
@@ -741,9 +741,9 @@ function ResultSection({
         `精算: ${name(s.fromId)}→${name(s.toId)}`, "", "",
         ...members.map((m) =>
           m.id === s.fromId
-            ? String(-s.amount)
-            : m.id === s.toId
             ? String(s.amount)
+            : m.id === s.toId
+            ? String(-s.amount)
             : ""
         ),
       ]);
@@ -754,8 +754,8 @@ function ResultSection({
         ...members.map((m) => {
           const bal = result.balance[m.id] ?? 0;
           const adj = result.settlements.reduce((sum, s) => {
-            if (s.fromId === m.id) return sum - s.amount;
-            if (s.toId === m.id) return sum + s.amount;
+            if (s.fromId === m.id) return sum + s.amount;
+            if (s.toId === m.id) return sum - s.amount;
             return sum;
           }, 0);
           return String(Math.round(bal + adj));
