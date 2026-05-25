@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "YesWaliCan - 立替精算アプリ",
-  description: "倍率・個別負担額に対応した立替払い精算アプリ",
+  title: "YesWaliCan - 割り勘アプリ",
+  description: "登録不要・無料で使える割り勘アプリ",
 };
 
 export default function RootLayout({
