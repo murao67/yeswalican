@@ -1032,7 +1032,7 @@ export default function EventApp({ eventId }: { eventId?: string }) {
           <div>
             <a href="/" target="_blank" rel="noopener noreferrer" className="block">
               <h1 className="text-2xl font-extrabold tracking-tight hover:opacity-80 transition-opacity">
-                <span className="text-[var(--accent)]">Yes</span>WaliCan
+                <span className="text-[var(--accent)]">¥es</span>WaliCan
               </h1>
             </a>
             {eventName ? (
