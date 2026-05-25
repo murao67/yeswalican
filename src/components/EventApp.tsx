@@ -284,17 +284,15 @@ function ExpenseSection({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
             />
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[var(--muted)] pointer-events-none">
-                ¥
-              </span>
+            <div className="flex items-center gap-1">
               <input
-                className="input w-28 pl-7"
+                className="input w-28"
                 type="number"
                 placeholder="金額"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
               />
+              <span className="text-sm text-[var(--muted)]">円</span>
             </div>
           </div>
 
@@ -397,12 +395,9 @@ function ExpenseSection({
               {participantIds.map((id) => (
                 <div key={id} className="flex items-center gap-2 text-sm">
                   <span className="w-20 font-medium">{memberName(id)}</span>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[var(--muted)] pointer-events-none">
-                      ¥
-                    </span>
+                  <div className="flex items-center gap-1">
                     <input
-                      className="input w-28 pl-7 text-sm"
+                      className="input w-24 text-sm"
                       type="number"
                       placeholder="自動按分"
                       value={
@@ -411,6 +406,7 @@ function ExpenseSection({
                       }
                       onChange={(e) => setCustomAmount(id, e.target.value)}
                     />
+                    <span className="text-xs text-[var(--muted)]">円</span>
                   </div>
                 </div>
               ))}
