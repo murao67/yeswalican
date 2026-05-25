@@ -761,66 +761,27 @@ export default function EventApp({ eventId }: { eventId?: string }) {
           </button>
         </div>
 
-        {/* Stepper */}
-        <div className="max-w-lg mx-auto px-6 pt-2 pb-3">
-          <nav className="flex items-center">
+        {/* Step tabs */}
+        <div className="max-w-lg mx-auto px-4">
+          <nav className="flex">
             {STEPS.map((step, i) => {
               const stepIndex = STEPS.findIndex((s) => s.id === activeTab);
               const isActive = step.id === activeTab;
               const isDone = i < stepIndex;
-              const count =
-                step.id === "settings"
-                  ? members.length
-                  : step.id === "expenses"
-                  ? expenses.length
-                  : 0;
               return (
-                <div
+                <button
                   key={step.id}
-                  className="flex items-center flex-1 last:flex-none"
+                  className={`flex-1 py-3 text-sm font-bold text-center border-b-[3px] transition-all ${
+                    isActive
+                      ? "border-[var(--accent)] text-[var(--accent)]"
+                      : isDone
+                      ? "border-[var(--accent)]/40 text-[var(--foreground)]"
+                      : "border-transparent text-[var(--muted)] hover:text-[var(--foreground)]"
+                  }`}
+                  onClick={() => setActiveTab(step.id)}
                 >
-                  <button
-                    className="flex flex-col items-center gap-1 group"
-                    onClick={() => setActiveTab(step.id)}
-                  >
-                    <span
-                      className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
-                        isActive
-                          ? "bg-[var(--accent)] text-white shadow-md"
-                          : isDone
-                          ? "bg-[var(--accent)] text-white opacity-60"
-                          : "bg-[var(--border)] text-[var(--muted)] group-hover:bg-[var(--accent-bg)] group-hover:text-[var(--accent)]"
-                      }`}
-                    >
-                      {isDone ? "✓" : step.step}
-                    </span>
-                    <span
-                      className={`text-[11px] font-medium whitespace-nowrap transition-colors ${
-                        isActive
-                          ? "text-[var(--accent)]"
-                          : isDone
-                          ? "text-[var(--foreground)]"
-                          : "text-[var(--muted)]"
-                      }`}
-                    >
-                      {step.label}
-                      {count > 0 && (
-                        <span className="ml-1 text-[10px] bg-[var(--accent-bg)] text-[var(--accent)] px-1 py-0.5 rounded-full">
-                          {count}
-                        </span>
-                      )}
-                    </span>
-                  </button>
-                  {i < STEPS.length - 1 && (
-                    <div
-                      className={`flex-1 h-0.5 mx-2 mt-[-18px] rounded transition-colors ${
-                        i < stepIndex
-                          ? "bg-[var(--accent)] opacity-60"
-                          : "bg-[var(--border)]"
-                      }`}
-                    />
-                  )}
-                </div>
+                  {step.label}
+                </button>
               );
             })}
           </nav>
