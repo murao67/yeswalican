@@ -490,7 +490,7 @@ function ResultSection({
       ...members.map((m) => String(b.amounts[m.id] ?? "")),
     ]);
     rows.push([
-      "負担合計", "", "",
+      "あるべき負担", "", "",
       ...members.map((m) => String(result.totalBurden[m.id] ?? 0)),
     ]);
     rows.push([
@@ -501,6 +501,32 @@ function ResultSection({
       "差額", "", "",
       ...members.map((m) => String(result.balance[m.id] ?? 0)),
     ]);
+    for (const s of result.settlements) {
+      rows.push([
+        `精算: ${name(s.fromId)}→${name(s.toId)}`, "", "",
+        ...members.map((m) =>
+          m.id === s.fromId
+            ? String(-s.amount)
+            : m.id === s.toId
+            ? String(s.amount)
+            : ""
+        ),
+      ]);
+    }
+    if (result.settlements.length > 0) {
+      rows.push([
+        "精算後", "", "",
+        ...members.map((m) => {
+          const bal = result.balance[m.id] ?? 0;
+          const adj = result.settlements.reduce((sum, s) => {
+            if (s.fromId === m.id) return sum - s.amount;
+            if (s.toId === m.id) return sum + s.amount;
+            return sum;
+          }, 0);
+          return String(Math.round(bal + adj));
+        }),
+      ]);
+    }
     const csv = [header, ...rows].map((r) => r.join(",")).join("\n");
     downloadCSV(csv, "settlement.csv");
   };
@@ -625,7 +651,7 @@ function ResultSection({
                 </tr>
               ))}
               <tr className="row-summary">
-                <td>負担合計</td>
+                <td>あるべき負担</td>
                 <td></td>
                 {members.map((m) => (
                   <td key={m.id}>
@@ -663,6 +689,46 @@ function ResultSection({
                   );
                 })}
               </tr>
+              {/* 精算による解消 */}
+              {result.settlements.map((s, i) => {
+                return (
+                  <tr key={`settle-${i}`} className="text-[var(--accent)]">
+                    <td className="text-xs">
+                      精算: {name(s.fromId)}→{name(s.toId)}
+                    </td>
+                    <td></td>
+                    {members.map((m) => (
+                      <td key={m.id}>
+                        {m.id === s.fromId
+                          ? `−¥${s.amount.toLocaleString()}`
+                          : m.id === s.toId
+                          ? `+¥${s.amount.toLocaleString()}`
+                          : ""}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+              {result.settlements.length > 0 && (
+                <tr className="row-balance">
+                  <td>精算後</td>
+                  <td></td>
+                  {members.map((m) => {
+                    const bal = result.balance[m.id] ?? 0;
+                    const adj = result.settlements.reduce((sum, s) => {
+                      if (s.fromId === m.id) return sum - s.amount;
+                      if (s.toId === m.id) return sum + s.amount;
+                      return sum;
+                    }, 0);
+                    const final_ = bal + adj;
+                    return (
+                      <td key={m.id} className="!text-[var(--foreground)]">
+                        ¥{Math.round(final_).toLocaleString()}
+                      </td>
+                    );
+                  })}
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
