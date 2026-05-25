@@ -467,6 +467,241 @@ function ExpenseSection({
   );
 }
 
+// --- 計算過程テーブル ---
+function BreakdownTableInner({
+  members,
+  result,
+  name,
+  full,
+}: {
+  members: Member[];
+  result: CalcResult;
+  name: (id: string) => string;
+  full?: boolean;
+}) {
+  const truncateTitle = (s: string) =>
+    full ? s : s.length > 10 ? s.slice(0, 10) + "..." : s;
+  const truncateName = (s: string) =>
+    full ? s : s.length > 5 ? s.slice(0, 5) + "..." : s;
+
+  return (
+    <table className="result-table">
+      <thead>
+        <tr>
+          <th className="!text-left">支出</th>
+          <th>合計</th>
+          {members.map((m) => (
+            <th key={m.id} className={full ? "" : "max-w-[60px]"}>
+              <span className="block truncate" title={m.name}>
+                {truncateName(m.name)}
+              </span>
+              {m.ratio !== 1 && (
+                <span className="text-[10px] font-normal text-[var(--muted)]">
+                  x{m.ratio}
+                </span>
+              )}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {result.breakdowns.map((b) => (
+          <tr key={b.expense.id}>
+            <td className={full ? "" : "max-w-[120px]"}>
+              <div className="font-medium truncate" title={b.expense.title}>
+                {truncateTitle(b.expense.title)}
+              </div>
+              <div className="text-[11px] text-[var(--muted)] truncate">
+                {name(b.expense.payerId)} が支払い
+              </div>
+            </td>
+            <td className="font-medium">
+              ¥{b.expense.amount.toLocaleString()}
+            </td>
+            {members.map((m) => {
+              const amt = b.amounts[m.id];
+              const isCustom = b.expense.customAmounts.some(
+                (c) => c.memberId === m.id
+              );
+              return (
+                <td key={m.id} className={isCustom ? "!bg-[#fffbeb]" : ""}>
+                  {amt != null ? (
+                    <span>
+                      ¥{amt.toLocaleString()}
+                      {isCustom && (
+                        <span className="text-[10px] text-[var(--warning)] ml-0.5">
+                          *
+                        </span>
+                      )}
+                    </span>
+                  ) : (
+                    <span className="text-[var(--muted)]">-</span>
+                  )}
+                </td>
+              );
+            })}
+          </tr>
+        ))}
+        <tr className="row-summary">
+          <td>あるべき負担</td>
+          <td></td>
+          {members.map((m) => (
+            <td key={m.id}>
+              ¥{(result.totalBurden[m.id] ?? 0).toLocaleString()}
+            </td>
+          ))}
+        </tr>
+        <tr className="row-summary">
+          <td>支払済</td>
+          <td></td>
+          {members.map((m) => (
+            <td key={m.id}>
+              ¥{(result.totalPaid[m.id] ?? 0).toLocaleString()}
+            </td>
+          ))}
+        </tr>
+        <tr className="row-balance">
+          <td>差額</td>
+          <td></td>
+          {members.map((m) => {
+            const bal = result.balance[m.id] ?? 0;
+            return (
+              <td
+                key={m.id}
+                className={
+                  bal > 0
+                    ? "!text-[var(--success)]"
+                    : bal < 0
+                    ? "!text-[var(--danger)]"
+                    : ""
+                }
+              >
+                {bal >= 0 ? "+" : ""}¥{bal.toLocaleString()}
+              </td>
+            );
+          })}
+        </tr>
+        {result.settlements.map((s, i) => (
+          <tr key={`settle-${i}`} className="text-[var(--accent)]">
+            <td className="text-xs">
+              精算: {name(s.fromId)}→{name(s.toId)}
+            </td>
+            <td></td>
+            {members.map((m) => (
+              <td key={m.id}>
+                {m.id === s.fromId
+                  ? `−¥${s.amount.toLocaleString()}`
+                  : m.id === s.toId
+                  ? `+¥${s.amount.toLocaleString()}`
+                  : ""}
+              </td>
+            ))}
+          </tr>
+        ))}
+        {result.settlements.length > 0 && (
+          <tr className="row-balance">
+            <td>精算後</td>
+            <td></td>
+            {members.map((m) => {
+              const bal = result.balance[m.id] ?? 0;
+              const adj = result.settlements.reduce((sum, s) => {
+                if (s.fromId === m.id) return sum - s.amount;
+                if (s.toId === m.id) return sum + s.amount;
+                return sum;
+              }, 0);
+              return (
+                <td key={m.id} className="!text-[var(--foreground)]">
+                  ¥{Math.round(bal + adj).toLocaleString()}
+                </td>
+              );
+            })}
+          </tr>
+        )}
+      </tbody>
+    </table>
+  );
+}
+
+function BreakdownTable({
+  members,
+  result,
+  name,
+  exportResultCSV,
+}: {
+  members: Member[];
+  result: CalcResult;
+  name: (id: string) => string;
+  exportResultCSV: () => void;
+}) {
+  const [showModal, setShowModal] = useState(false);
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="section-label">計算過程</h3>
+        <div className="flex gap-2">
+          <button
+            className="btn-secondary text-xs !px-2.5 !py-1 hidden sm:inline-block"
+            onClick={() => setShowModal(true)}
+          >
+            大きく表示
+          </button>
+          <button
+            className="btn-secondary text-xs !px-2.5 !py-1"
+            onClick={exportResultCSV}
+          >
+            CSV出力
+          </button>
+        </div>
+      </div>
+      <div className="overflow-x-auto -mx-1.5">
+        <BreakdownTableInner
+          members={members}
+          result={result}
+          name={name}
+        />
+      </div>
+      <p className="text-[11px] text-[var(--muted)] mt-2">
+        <span className="inline-block w-2 h-2 bg-[#fffbeb] border border-[#fde68a] rounded-sm mr-1" />
+        * = 個別指定額 / それ以外は倍率に基づく自動按分
+      </p>
+
+      {/* モーダル */}
+      {showModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+          onClick={() => setShowModal(false)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl max-w-[95vw] max-h-[90vh] overflow-auto p-6 animate-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-base">計算過程</h3>
+              <button
+                className="btn-secondary text-sm !px-3 !py-1"
+                onClick={() => setShowModal(false)}
+              >
+                閉じる
+              </button>
+            </div>
+            <BreakdownTableInner
+              members={members}
+              result={result}
+              name={name}
+              full
+            />
+            <p className="text-xs text-[var(--muted)] mt-3">
+              <span className="inline-block w-2 h-2 bg-[#fffbeb] border border-[#fde68a] rounded-sm mr-1" />
+              * = 個別指定額 / それ以外は倍率に基づく自動按分
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // --- 精算結果 ---
 function ResultSection({
   members,
@@ -576,167 +811,12 @@ function ResultSection({
         </div>
       )}
 
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="section-label">計算過程</h3>
-          <button
-            className="btn-secondary text-xs !px-2.5 !py-1"
-            onClick={exportResultCSV}
-          >
-            CSV出力
-          </button>
-        </div>
-        <div className="overflow-x-auto -mx-1.5">
-          <table className="result-table">
-            <thead>
-              <tr>
-                <th className="!text-left">支出</th>
-                <th>合計</th>
-                {members.map((m) => (
-                  <th key={m.id} className="max-w-[60px]">
-                    <span className="block truncate" title={m.name}>
-                      {truncate(m.name, 5)}
-                    </span>
-                    {m.ratio !== 1 && (
-                      <span className="text-[10px] font-normal text-[var(--muted)]">
-                        x{m.ratio}
-                      </span>
-                    )}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {result.breakdowns.map((b) => (
-                <tr key={b.expense.id}>
-                  <td className="max-w-[120px]">
-                    <div
-                      className="font-medium truncate"
-                      title={b.expense.title}
-                    >
-                      {truncate(b.expense.title, 10)}
-                    </div>
-                    <div className="text-[11px] text-[var(--muted)] truncate">
-                      {name(b.expense.payerId)} が支払い
-                    </div>
-                  </td>
-                  <td className="font-medium">
-                    ¥{b.expense.amount.toLocaleString()}
-                  </td>
-                  {members.map((m) => {
-                    const amt = b.amounts[m.id];
-                    const isCustom = b.expense.customAmounts.some(
-                      (c) => c.memberId === m.id
-                    );
-                    return (
-                      <td
-                        key={m.id}
-                        className={isCustom ? "!bg-[#fffbeb]" : ""}
-                      >
-                        {amt != null ? (
-                          <span>
-                            ¥{amt.toLocaleString()}
-                            {isCustom && (
-                              <span className="text-[10px] text-[var(--warning)] ml-0.5">
-                                *
-                              </span>
-                            )}
-                          </span>
-                        ) : (
-                          <span className="text-[var(--muted)]">-</span>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-              <tr className="row-summary">
-                <td>あるべき負担</td>
-                <td></td>
-                {members.map((m) => (
-                  <td key={m.id}>
-                    ¥{(result.totalBurden[m.id] ?? 0).toLocaleString()}
-                  </td>
-                ))}
-              </tr>
-              <tr className="row-summary">
-                <td>支払済</td>
-                <td></td>
-                {members.map((m) => (
-                  <td key={m.id}>
-                    ¥{(result.totalPaid[m.id] ?? 0).toLocaleString()}
-                  </td>
-                ))}
-              </tr>
-              <tr className="row-balance">
-                <td>差額</td>
-                <td></td>
-                {members.map((m) => {
-                  const bal = result.balance[m.id] ?? 0;
-                  return (
-                    <td
-                      key={m.id}
-                      className={
-                        bal > 0
-                          ? "!text-[var(--success)]"
-                          : bal < 0
-                          ? "!text-[var(--danger)]"
-                          : ""
-                      }
-                    >
-                      {bal >= 0 ? "+" : ""}¥{bal.toLocaleString()}
-                    </td>
-                  );
-                })}
-              </tr>
-              {/* 精算による解消 */}
-              {result.settlements.map((s, i) => {
-                return (
-                  <tr key={`settle-${i}`} className="text-[var(--accent)]">
-                    <td className="text-xs">
-                      精算: {name(s.fromId)}→{name(s.toId)}
-                    </td>
-                    <td></td>
-                    {members.map((m) => (
-                      <td key={m.id}>
-                        {m.id === s.fromId
-                          ? `−¥${s.amount.toLocaleString()}`
-                          : m.id === s.toId
-                          ? `+¥${s.amount.toLocaleString()}`
-                          : ""}
-                      </td>
-                    ))}
-                  </tr>
-                );
-              })}
-              {result.settlements.length > 0 && (
-                <tr className="row-balance">
-                  <td>精算後</td>
-                  <td></td>
-                  {members.map((m) => {
-                    const bal = result.balance[m.id] ?? 0;
-                    const adj = result.settlements.reduce((sum, s) => {
-                      if (s.fromId === m.id) return sum - s.amount;
-                      if (s.toId === m.id) return sum + s.amount;
-                      return sum;
-                    }, 0);
-                    const final_ = bal + adj;
-                    return (
-                      <td key={m.id} className="!text-[var(--foreground)]">
-                        ¥{Math.round(final_).toLocaleString()}
-                      </td>
-                    );
-                  })}
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        <p className="text-[11px] text-[var(--muted)] mt-2">
-          <span className="inline-block w-2 h-2 bg-[#fffbeb] border border-[#fde68a] rounded-sm mr-1" />
-          * = 個別指定額 / それ以外は倍率に基づく自動按分
-        </p>
-      </div>
+      <BreakdownTable
+        members={members}
+        result={result}
+        name={name}
+        exportResultCSV={exportResultCSV}
+      />
     </section>
   );
 }
