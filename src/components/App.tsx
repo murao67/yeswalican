@@ -239,7 +239,7 @@ function ExpenseSection({
         <div className="flex items-center gap-2">
           <span className="text-xl">💰</span>
           <div>
-            <h2 className="text-base font-bold">支払い</h2>
+            <h2 className="text-base font-bold">立替</h2>
             <p className="section-label">立替えた支払いを記録</p>
           </div>
         </div>
@@ -388,7 +388,7 @@ function ExpenseSection({
         )}
 
         <button className="btn-primary w-full" onClick={add}>
-          + 支払いを追加
+          + 立替を追加
         </button>
       </div>
 
