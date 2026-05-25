@@ -488,11 +488,11 @@ function BreakdownTableInner({
     <table className="result-table">
       <thead>
         <tr>
-          <th className="!text-left" rowSpan={2}>支出</th>
-          <th rowSpan={2}>合計</th>
+          <th className="!text-left" rowSpan={2}></th>
+          <th rowSpan={2}></th>
           <th
             colSpan={members.length}
-            className="!text-center text-xs font-bold text-[var(--accent)]"
+            className="!text-center text-xs font-bold"
           >
             あるべき負担額
           </th>
@@ -711,6 +711,33 @@ function BreakdownTable({
 }
 
 // --- 精算結果 ---
+function CopySettlementsButton({
+  settlements,
+  name,
+}: {
+  settlements: { fromId: string; toId: string; amount: number }[];
+  name: (id: string) => string;
+}) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    const text = settlements
+      .map((s) => `${name(s.fromId)} → ${name(s.toId)}: ¥${s.amount.toLocaleString()}`)
+      .join("\n");
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+  return (
+    <button
+      className={`btn-secondary text-xs w-full ${copied ? "!bg-[var(--success)] !text-white !border-[var(--success)]" : ""}`}
+      onClick={copy}
+    >
+      {copied ? "✓ コピーしました" : "テキストでコピー"}
+    </button>
+  );
+}
+
 function ResultSection({
   members,
   result,
@@ -812,6 +839,7 @@ function ResultSection({
               </span>
             </div>
           ))}
+          <CopySettlementsButton settlements={result.settlements} name={name} />
         </div>
       ) : (
         <div className="text-center py-4 text-[var(--muted)] text-sm">
