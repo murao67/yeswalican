@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { Fragment, useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Member, Expense, AppData, CustomAmount } from "@/lib/types";
 import { calculate, CalcResult } from "@/lib/calc";
@@ -277,25 +277,6 @@ function ExpenseSection({
         </div>
       ) : (
         <div className="space-y-3">
-          <div className="flex gap-2 flex-wrap">
-            <input
-              className="input flex-1 min-w-[120px]"
-              placeholder="例: 夕食代"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
-            <div className="flex items-center gap-1">
-              <input
-                className="input w-28"
-                type="number"
-                placeholder="金額"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-              />
-              <span className="text-sm text-[var(--muted)]">円</span>
-            </div>
-          </div>
-
           <div>
             <label className="section-label mb-1.5 block">支払った人</label>
             <div className="flex flex-wrap gap-1.5">
@@ -312,6 +293,25 @@ function ExpenseSection({
                   {m.name}
                 </button>
               ))}
+            </div>
+          </div>
+
+          <div className="flex gap-2 flex-wrap">
+            <input
+              className="input flex-1 min-w-[120px]"
+              placeholder="例: 夕食代"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+            <div className="flex items-center gap-1">
+              <input
+                className="input w-28"
+                type="number"
+                placeholder="金額"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+              />
+              <span className="text-sm text-[var(--muted)]">円</span>
             </div>
           </div>
 
@@ -373,25 +373,9 @@ function ExpenseSection({
 
           {useCustom && (
             <div className="space-y-2 bg-[#fffbeb] border border-[#fde68a] rounded-xl p-3 animate-in">
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-[var(--warning)] font-medium">
-                  金額を指定した人は固定額、空欄の人は残額を倍率で按分します
-                </p>
-                <button
-                  className="btn-secondary text-xs !px-2.5 !py-1 whitespace-nowrap"
-                  onClick={() => {
-                    const filled = participantIds
-                      .filter(
-                        (id) =>
-                          !customAmounts.some((c) => c.memberId === id)
-                      )
-                      .map((id) => ({ memberId: id, amount: 0 }));
-                    setCustomAmounts([...customAmounts, ...filled]);
-                  }}
-                >
-                  空欄に0を入力
-                </button>
-              </div>
+              <p className="text-xs text-[var(--warning)] font-medium">
+                金額を指定した人は固定額、空欄の人は残額を倍率で按分します
+              </p>
               {participantIds.map((id) => (
                 <div key={id} className="flex items-center gap-2 text-sm">
                   <span className="w-20 font-medium">{memberName(id)}</span>
@@ -410,6 +394,22 @@ function ExpenseSection({
                   </div>
                 </div>
               ))}
+              <div className="flex justify-end pt-1">
+                <button
+                  className="btn-secondary text-xs !px-2.5 !py-1 whitespace-nowrap"
+                  onClick={() => {
+                    const filled = participantIds
+                      .filter(
+                        (id) =>
+                          !customAmounts.some((c) => c.memberId === id)
+                      )
+                      .map((id) => ({ memberId: id, amount: 0 }));
+                    setCustomAmounts([...customAmounts, ...filled]);
+                  }}
+                >
+                  空欄に0を入力
+                </button>
+              </div>
             </div>
           )}
 
@@ -863,10 +863,67 @@ function ResultSection({
 }
 
 // --- ステップ ---
-const STEPS: { id: TabId; label: string; step: number }[] = [
-  { id: "settings", label: "基本設定", step: 1 },
-  { id: "expenses", label: "立替登録", step: 2 },
-  { id: "result", label: "精算結果", step: 3 },
+const IconSettings = () => (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+  </svg>
+);
+
+const IconExpense = () => (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <rect x="2" y="6" width="20" height="12" rx="2" />
+    <circle cx="12" cy="12" r="2.5" />
+    <path d="M6 10v.01M18 14v.01" />
+  </svg>
+);
+
+const IconResult = () => (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M9 11l3 3L22 4" />
+    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+  </svg>
+);
+
+const STEPS: {
+  id: TabId;
+  label: string;
+  Icon: () => React.ReactElement;
+  step: number;
+}[] = [
+  { id: "settings", label: "基本設定", Icon: IconSettings, step: 1 },
+  { id: "expenses", label: "立替登録", Icon: IconExpense, step: 2 },
+  { id: "result", label: "精算結果", Icon: IconResult, step: 3 },
 ];
 
 // --- メインApp ---
@@ -887,6 +944,7 @@ export default function EventApp({ eventId }: { eventId?: string }) {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(!!eventId);
   const [copied, setCopied] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
   // 既存イベント読み込み
   useEffect(() => {
@@ -996,10 +1054,20 @@ export default function EventApp({ eventId }: { eventId?: string }) {
               {copied ? "✓ コピー!" : saving ? "保存中..." : "🔗 保存してURLをコピー"}
             </button>
             <span className="relative group">
-              <span className="w-5 h-5 rounded-full bg-[var(--border)] text-[var(--muted)] text-xs flex items-center justify-center cursor-help">
+              <button
+                type="button"
+                aria-label="ヘルプ"
+                className="w-5 h-5 rounded-full bg-[var(--border)] text-[var(--muted)] text-xs flex items-center justify-center cursor-help"
+                onClick={() => setShowHelp((v) => !v)}
+                onBlur={() => setShowHelp(false)}
+              >
                 ?
-              </span>
-              <span className="absolute right-0 top-7 w-52 bg-[var(--foreground)] text-white text-xs rounded-lg px-3 py-2 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-20 leading-relaxed">
+              </button>
+              <span
+                className={`absolute right-0 top-7 w-52 bg-[var(--foreground)] text-white text-xs rounded-lg px-3 py-2 pointer-events-none group-hover:opacity-100 transition-opacity z-20 leading-relaxed ${
+                  showHelp ? "opacity-100" : "opacity-0"
+                }`}
+              >
                 保存するとイベント固有のURLが発行されます
               </span>
             </span>
@@ -1008,25 +1076,32 @@ export default function EventApp({ eventId }: { eventId?: string }) {
 
         {/* Step tabs */}
         <div className="max-w-lg mx-auto px-4">
-          <nav className="flex">
+          <nav className="flex items-stretch">
             {STEPS.map((step, i) => {
               const stepIndex = STEPS.findIndex((s) => s.id === activeTab);
               const isActive = step.id === activeTab;
               const isDone = i < stepIndex;
               return (
-                <button
-                  key={step.id}
-                  className={`flex-1 py-3 text-sm font-bold text-center border-b-[3px] transition-all ${
-                    isActive
-                      ? "border-[var(--accent)] text-[var(--accent)]"
-                      : isDone
-                      ? "border-[var(--accent)]/40 text-[var(--foreground)]"
-                      : "border-transparent text-[var(--muted)] hover:text-[var(--foreground)]"
-                  }`}
-                  onClick={() => setActiveTab(step.id)}
-                >
-                  {step.label}
-                </button>
+                <Fragment key={step.id}>
+                  <button
+                    className={`flex-1 py-3 text-sm font-bold border-b-[3px] transition-all flex items-center justify-center gap-1.5 ${
+                      isActive
+                        ? "border-[var(--accent)] text-[var(--accent)]"
+                        : isDone
+                        ? "border-[var(--accent)]/40 text-[var(--foreground)]"
+                        : "border-transparent text-[var(--muted)] hover:text-[var(--foreground)]"
+                    }`}
+                    onClick={() => setActiveTab(step.id)}
+                  >
+                    <step.Icon />
+                    {step.label}
+                  </button>
+                  {i < STEPS.length - 1 && (
+                    <span className="flex items-center text-xs text-[var(--muted)] px-0.5 select-none">
+                      ›
+                    </span>
+                  )}
+                </Fragment>
               );
             })}
           </nav>
