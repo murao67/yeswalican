@@ -1,5 +1,5 @@
-import App from "@/components/App";
+import EventApp from "@/components/EventApp";
 
 export default function Home() {
-  return <App />;
+  return <EventApp />;
 }

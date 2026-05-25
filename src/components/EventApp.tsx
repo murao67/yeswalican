@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Member, Expense, AppData, CustomAmount } from "@/lib/types";
 import { calculate, CalcResult } from "@/lib/calc";
-import { encodeData, decodeData } from "@/lib/url";
+import { createEvent, getEvent, updateEvent } from "@/lib/db";
 import {
   membersToCSV,
   csvToMembers,
@@ -17,7 +18,7 @@ function genId() {
   return Math.random().toString(36).slice(2, 9);
 }
 
-type TabId = "members" | "expenses" | "result";
+type TabId = "settings" | "expenses" | "result";
 
 // --- CSV Buttons ---
 function CSVButtons({
@@ -52,11 +53,15 @@ function CSVButtons({
   );
 }
 
-// --- メンバー管理 ---
-function MemberSection({
+// --- 基本設定 ---
+function SettingsSection({
+  eventName,
+  setEventName,
   members,
   setMembers,
 }: {
+  eventName: string;
+  setEventName: (n: string) => void;
   members: Member[];
   setMembers: (m: Member[]) => void;
 }) {
@@ -94,6 +99,18 @@ function MemberSection({
 
   return (
     <section className="space-y-4 animate-in">
+      <div>
+        <label className="section-label mb-1.5 block">イベント名</label>
+        <input
+          className="input w-full"
+          placeholder="例: 沖縄旅行 2026"
+          value={eventName}
+          onChange={(e) => setEventName(e.target.value)}
+        />
+      </div>
+
+      <hr className="border-[var(--border)]" />
+
       <div className="flex items-center justify-between">
         <p className="text-sm text-[var(--muted)]">参加者と負担倍率を設定</p>
         <CSVButtons onExport={handleExport} onImport={handleImport} />
@@ -232,7 +249,7 @@ function ExpenseSection({
 
       {members.length < 2 ? (
         <div className="text-center py-8 text-[var(--muted)] text-sm">
-          メンバーを2人以上追加してください
+          基本設定でメンバーを2人以上追加してください
         </div>
       ) : (
         <div className="space-y-3">
@@ -424,7 +441,7 @@ function ResultSection({
     return (
       <section className="animate-in">
         <div className="text-center py-12 text-[var(--muted)] text-sm">
-          メンバーと立替を登録すると精算結果が表示されます
+          基本設定と立替を登録すると精算結果が表示されます
         </div>
       </section>
     );
@@ -432,7 +449,6 @@ function ResultSection({
 
   return (
     <section className="space-y-5 animate-in">
-      {/* 送金リスト */}
       {result.settlements.length > 0 ? (
         <div className="space-y-2">
           {result.settlements.map((s, i) => (
@@ -466,7 +482,6 @@ function ResultSection({
         </div>
       )}
 
-      {/* 計算過程テーブル */}
       <div>
         <h3 className="section-label mb-2">計算過程</h3>
         <div className="overflow-x-auto -mx-1.5">
@@ -579,29 +594,36 @@ function ResultSection({
 
 // --- ステップ ---
 const STEPS: { id: TabId; label: string; step: number }[] = [
-  { id: "members", label: "メンバー登録", step: 1 },
+  { id: "settings", label: "基本設定", step: 1 },
   { id: "expenses", label: "立替登録", step: 2 },
   { id: "result", label: "精算結果", step: 3 },
 ];
 
 // --- メインApp ---
-export default function App() {
+export default function EventApp({ eventId }: { eventId?: string }) {
+  const router = useRouter();
+  const [id, setId] = useState<string | undefined>(eventId);
+  const [eventName, setEventName] = useState("");
   const [members, setMembers] = useState<Member[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [activeTab, setActiveTab] = useState<TabId>("settings");
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(!!eventId);
   const [copied, setCopied] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabId>("members");
 
+  // 既存イベント読み込み
   useEffect(() => {
-    const hash = window.location.hash.slice(1);
-    if (hash) {
-      const data = decodeData(hash);
-      if (data) {
-        setMembers(data.members);
-        setExpenses(data.expenses);
-        if (data.expenses.length > 0) setActiveTab("result");
+    if (!eventId) return;
+    (async () => {
+      const event = await getEvent(eventId);
+      if (event) {
+        setEventName(event.name);
+        setMembers(event.data.members);
+        setExpenses(event.data.expenses);
       }
-    }
-  }, []);
+      setLoading(false);
+    })();
+  }, [eventId]);
 
   const data: AppData = { members, expenses };
   const result =
@@ -609,15 +631,47 @@ export default function App() {
       ? calculate(members, expenses)
       : null;
 
-  const share = useCallback(() => {
-    const encoded = encodeData(data);
-    const url = `${window.location.origin}${window.location.pathname}#${encoded}`;
-    navigator.clipboard.writeText(url).then(() => {
+  const save = useCallback(
+    async (nextTab: TabId) => {
+      setSaving(true);
+      try {
+        if (id) {
+          await updateEvent(id, eventName, data);
+        } else {
+          const newId = await createEvent(eventName, data);
+          if (newId) {
+            setId(newId);
+            router.replace(`/e/${newId}`);
+          }
+        }
+      } finally {
+        setSaving(false);
+      }
+      setActiveTab(nextTab);
+    },
+    [id, eventName, data, router]
+  );
+
+  const shareUrl =
+    id && typeof window !== "undefined"
+      ? `${window.location.origin}/e/${id}`
+      : null;
+
+  const copyUrl = useCallback(() => {
+    if (!shareUrl) return;
+    navigator.clipboard.writeText(shareUrl).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
-    window.history.replaceState(null, "", `#${encoded}`);
-  }, [data]);
+  }, [shareUrl]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-[var(--muted)]">
+        読み込み中...
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen pb-12">
@@ -628,20 +682,26 @@ export default function App() {
             <h1 className="text-lg font-bold tracking-tight">
               <span className="text-[var(--accent)]">Yes</span>WaliCan
             </h1>
-            <p className="text-[11px] text-[var(--muted)] -mt-0.5">
-              立替精算をかんたんに
-            </p>
+            {eventName ? (
+              <p className="text-[11px] text-[var(--foreground)] font-medium -mt-0.5">
+                {eventName}
+              </p>
+            ) : (
+              <p className="text-[11px] text-[var(--muted)] -mt-0.5">
+                立替精算をかんたんに
+              </p>
+            )}
           </div>
-          {(members.length > 0 || expenses.length > 0) && (
+          {shareUrl && (
             <button
               className={`text-sm px-3 py-1.5 rounded-lg border transition-all ${
                 copied
                   ? "bg-[var(--success)] text-white border-[var(--success)]"
                   : "border-[var(--border)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
               }`}
-              onClick={share}
+              onClick={copyUrl}
             >
-              {copied ? "✓ コピー!" : "🔗 共有"}
+              {copied ? "✓ コピー!" : "🔗 共有URL"}
             </button>
           )}
         </div>
@@ -654,13 +714,16 @@ export default function App() {
               const isActive = step.id === activeTab;
               const isDone = i < stepIndex;
               const count =
-                step.id === "members"
+                step.id === "settings"
                   ? members.length
                   : step.id === "expenses"
                   ? expenses.length
                   : 0;
               return (
-                <div key={step.id} className="flex items-center flex-1 last:flex-none">
+                <div
+                  key={step.id}
+                  className="flex items-center flex-1 last:flex-none"
+                >
                   <button
                     className="flex flex-col items-center gap-1 group"
                     onClick={() => setActiveTab(step.id)}
@@ -696,7 +759,9 @@ export default function App() {
                   {i < STEPS.length - 1 && (
                     <div
                       className={`flex-1 h-0.5 mx-2 mt-[-18px] rounded transition-colors ${
-                        i < stepIndex ? "bg-[var(--accent)] opacity-60" : "bg-[var(--border)]"
+                        i < stepIndex
+                          ? "bg-[var(--accent)] opacity-60"
+                          : "bg-[var(--border)]"
                       }`}
                     />
                   )}
@@ -710,8 +775,13 @@ export default function App() {
       {/* Main */}
       <main className="max-w-lg mx-auto px-4 pt-5 space-y-4">
         <div className="card">
-          {activeTab === "members" && (
-            <MemberSection members={members} setMembers={setMembers} />
+          {activeTab === "settings" && (
+            <SettingsSection
+              eventName={eventName}
+              setEventName={setEventName}
+              members={members}
+              setMembers={setMembers}
+            />
           )}
 
           {activeTab === "expenses" && (
@@ -729,11 +799,11 @@ export default function App() {
 
         {/* ナビゲーションボタン */}
         <div className="flex gap-3">
-          {activeTab !== "members" && (
+          {activeTab !== "settings" && (
             <button
               className="btn-secondary flex-1"
               onClick={() =>
-                setActiveTab(activeTab === "result" ? "expenses" : "members")
+                setActiveTab(activeTab === "result" ? "expenses" : "settings")
               }
             >
               ← 戻る
@@ -742,11 +812,23 @@ export default function App() {
           {activeTab !== "result" && (
             <button
               className="btn-primary flex-1"
+              disabled={saving}
               onClick={() =>
-                setActiveTab(activeTab === "members" ? "expenses" : "result")
+                save(activeTab === "settings" ? "expenses" : "result")
               }
             >
-              次へ →
+              {saving
+                ? "保存中..."
+                : `保存して次へ →`}
+            </button>
+          )}
+          {activeTab === "result" && (
+            <button
+              className="btn-primary flex-1"
+              disabled={saving}
+              onClick={() => save("result")}
+            >
+              {saving ? "保存中..." : "保存する"}
             </button>
           )}
         </div>
