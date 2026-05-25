@@ -296,22 +296,25 @@ function ExpenseSection({
             </div>
           </div>
 
-          <div className="flex gap-2 flex-wrap">
-            <input
-              className="input flex-1 min-w-[120px]"
-              placeholder="例: 夕食代"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
-            <div className="flex items-center gap-1">
+          <div>
+            <label className="section-label mb-1.5 block">支払った内容</label>
+            <div className="flex gap-2 flex-wrap">
               <input
-                className="input w-28"
-                type="number"
-                placeholder="金額"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                className="input flex-1 min-w-[120px]"
+                placeholder="例: 夕食代"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
               />
-              <span className="text-sm text-[var(--muted)]">円</span>
+              <div className="flex items-center gap-1">
+                <input
+                  className="input w-28"
+                  type="number"
+                  placeholder="金額"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                />
+                <span className="text-sm text-[var(--muted)]">円</span>
+              </div>
             </div>
           </div>
 
@@ -976,7 +979,7 @@ export default function EventApp({ eventId }: { eventId?: string }) {
           const newId = await createEvent(eventName, data);
           if (newId) {
             setId(newId);
-            router.replace(`/e/${newId}`);
+            router.replace(`/e/${newId}#${nextTab}`);
           }
         }
       } finally {
@@ -1043,7 +1046,7 @@ export default function EventApp({ eventId }: { eventId?: string }) {
           </div>
           <div className="flex items-center gap-1.5">
             <button
-              className={`text-sm px-3 py-1.5 rounded-lg border transition-all ${
+              className={`text-sm px-3 py-1.5 rounded-lg border transition-all flex items-center gap-1.5 ${
                 copied
                   ? "bg-[var(--success)] text-white border-[var(--success)]"
                   : "border-[var(--border)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
@@ -1051,7 +1054,44 @@ export default function EventApp({ eventId }: { eventId?: string }) {
               disabled={saving}
               onClick={saveAndCopyUrl}
             >
-              {copied ? "✓ コピー!" : saving ? "保存中..." : "🔗 保存してURLをコピー"}
+              {copied ? (
+                <>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  コピー!
+                </>
+              ) : saving ? (
+                "保存中..."
+              ) : (
+                <>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                  </svg>
+                  保存してURLをコピー
+                </>
+              )}
             </button>
             <span className="relative group">
               <button
