@@ -7,7 +7,7 @@ export default function DisclaimerFooter() {
 
   return (
     <>
-      <footer className="max-w-lg mx-auto px-4 pt-8 pb-6 text-center text-xs text-[var(--muted)]">
+      <footer className="max-w-lg mx-auto w-full px-4 pt-8 pb-6 text-center text-xs text-[var(--muted)]">
         <button
           className="hover:text-[var(--accent)] transition-colors underline-offset-2 hover:underline"
           onClick={() => setShow(true)}
@@ -66,6 +66,22 @@ export default function DisclaimerFooter() {
                 <h4 className="font-semibold mb-1">5. サービス内容の変更・停止</h4>
                 <p>
                   予告なく本サービスの仕様変更・提供停止を行う場合があります。
+                </p>
+              </section>
+              <section>
+                <h4 className="font-semibold mb-1">6. 運営者情報</h4>
+                <p>
+                  本サービスはフェスアソシエイツ株式会社が運営しています。お問い合わせは下記サイトよりお願いいたします。
+                </p>
+                <p className="mt-1">
+                  <a
+                    href="https://fessassociates.co.jp/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[var(--accent)] underline underline-offset-2 hover:opacity-80 break-all"
+                  >
+                    https://fessassociates.co.jp/
+                  </a>
                 </p>
               </section>
             </div>
