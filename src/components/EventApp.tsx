@@ -652,18 +652,30 @@ export default function EventApp({ eventId }: { eventId?: string }) {
     [id, eventName, data, router]
   );
 
-  const shareUrl =
-    id && typeof window !== "undefined"
-      ? `${window.location.origin}/e/${id}`
-      : null;
-
-  const copyUrl = useCallback(() => {
-    if (!shareUrl) return;
-    navigator.clipboard.writeText(shareUrl).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
-  }, [shareUrl]);
+  const saveAndCopyUrl = useCallback(async () => {
+    setSaving(true);
+    try {
+      let eventId = id;
+      if (eventId) {
+        await updateEvent(eventId, eventName, data);
+      } else {
+        const newId = await createEvent(eventName, data);
+        if (newId) {
+          eventId = newId;
+          setId(newId);
+          router.replace(`/e/${newId}`);
+        }
+      }
+      if (eventId) {
+        const url = `${window.location.origin}/e/${eventId}`;
+        await navigator.clipboard.writeText(url);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }
+    } finally {
+      setSaving(false);
+    }
+  }, [id, eventName, data, router]);
 
   if (loading) {
     return (
@@ -692,18 +704,17 @@ export default function EventApp({ eventId }: { eventId?: string }) {
               </p>
             )}
           </div>
-          {shareUrl && (
-            <button
-              className={`text-sm px-3 py-1.5 rounded-lg border transition-all ${
-                copied
-                  ? "bg-[var(--success)] text-white border-[var(--success)]"
-                  : "border-[var(--border)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
-              }`}
-              onClick={copyUrl}
-            >
-              {copied ? "✓ コピー!" : "🔗 共有URL"}
-            </button>
-          )}
+          <button
+            className={`text-sm px-3 py-1.5 rounded-lg border transition-all ${
+              copied
+                ? "bg-[var(--success)] text-white border-[var(--success)]"
+                : "border-[var(--border)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
+            }`}
+            disabled={saving}
+            onClick={saveAndCopyUrl}
+          >
+            {copied ? "✓ コピー!" : saving ? "保存中..." : "🔗 保存してURLをコピー"}
+          </button>
         </div>
 
         {/* Stepper */}
