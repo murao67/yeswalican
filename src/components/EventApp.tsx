@@ -477,6 +477,34 @@ function ResultSection({
 }) {
   const name = (id: string) => members.find((m) => m.id === id)?.name ?? "?";
 
+  const truncate = (s: string, max: number) =>
+    s.length > max ? s.slice(0, max) + "..." : s;
+
+  const exportResultCSV = () => {
+    if (!result) return;
+    const header = ["支出", "支払者", "合計", ...members.map((m) => m.name)];
+    const rows = result.breakdowns.map((b) => [
+      b.expense.title,
+      name(b.expense.payerId),
+      String(b.expense.amount),
+      ...members.map((m) => String(b.amounts[m.id] ?? "")),
+    ]);
+    rows.push([
+      "負担合計", "", "",
+      ...members.map((m) => String(result.totalBurden[m.id] ?? 0)),
+    ]);
+    rows.push([
+      "支払済", "", "",
+      ...members.map((m) => String(result.totalPaid[m.id] ?? 0)),
+    ]);
+    rows.push([
+      "差額", "", "",
+      ...members.map((m) => String(result.balance[m.id] ?? 0)),
+    ]);
+    const csv = [header, ...rows].map((r) => r.join(",")).join("\n");
+    downloadCSV(csv, "settlement.csv");
+  };
+
   if (!result) {
     return (
       <section className="animate-in">
@@ -523,7 +551,15 @@ function ResultSection({
       )}
 
       <div>
-        <h3 className="section-label mb-2">計算過程</h3>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="section-label">計算過程</h3>
+          <button
+            className="btn-secondary text-xs !px-2.5 !py-1"
+            onClick={exportResultCSV}
+          >
+            CSV出力
+          </button>
+        </div>
         <div className="overflow-x-auto -mx-1.5">
           <table className="result-table">
             <thead>
@@ -531,8 +567,10 @@ function ResultSection({
                 <th className="!text-left">支出</th>
                 <th>合計</th>
                 {members.map((m) => (
-                  <th key={m.id}>
-                    <span className="block">{m.name}</span>
+                  <th key={m.id} className="max-w-[60px]">
+                    <span className="block truncate" title={m.name}>
+                      {truncate(m.name, 5)}
+                    </span>
                     {m.ratio !== 1 && (
                       <span className="text-[10px] font-normal text-[var(--muted)]">
                         x{m.ratio}
@@ -545,9 +583,14 @@ function ResultSection({
             <tbody>
               {result.breakdowns.map((b) => (
                 <tr key={b.expense.id}>
-                  <td>
-                    <div className="font-medium">{b.expense.title}</div>
-                    <div className="text-[11px] text-[var(--muted)]">
+                  <td className="max-w-[120px]">
+                    <div
+                      className="font-medium truncate"
+                      title={b.expense.title}
+                    >
+                      {truncate(b.expense.title, 10)}
+                    </div>
+                    <div className="text-[11px] text-[var(--muted)] truncate">
                       {name(b.expense.payerId)} が支払い
                     </div>
                   </td>
