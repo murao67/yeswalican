@@ -151,6 +151,11 @@ function OnboardingScreen({
             <br />
             URLを共有すれば、みんなで立替を登録できます。
           </p>
+          <p className="text-[11px] text-[var(--warning)] text-center leading-relaxed">
+            URLを知っている人は誰でもアクセスできるようになります。
+            <br />
+            個人情報などの秘密情報は登録しないようご注意ください。
+          </p>
         </div>
       </main>
       <DisclaimerFooter />
