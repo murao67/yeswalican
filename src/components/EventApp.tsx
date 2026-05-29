@@ -1579,15 +1579,6 @@ export default function EventApp({ eventId }: { eventId?: string }) {
               {saving ? "保存中..." : "保存して次へ"}
             </button>
           )}
-          {activeTab === "result" && (
-            <button
-              className="btn-primary flex-1 inline-flex items-center justify-center"
-              disabled={saving}
-              onClick={() => save("result")}
-            >
-              {saving ? "保存中..." : "保存する"}
-            </button>
-          )}
         </div>
       </main>
 
