@@ -131,7 +131,7 @@ function OnboardingScreen({
             <input
               autoFocus
               className="input w-full"
-              placeholder="例: 沖縄旅行 2026"
+              placeholder="例: キャンプ in館山 202605"
               value={name}
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => {
