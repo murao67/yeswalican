@@ -18,7 +18,29 @@ function genId() {
   return Math.random().toString(36).slice(2, 9);
 }
 
-// 共有アイコンのみのコピーボタン（コピー後は「コピー!」を表示）
+// 画面下部に表示するコピー完了トースト
+function CopyToast({ label }: { label: string }) {
+  return (
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-1.5 bg-[var(--foreground)] text-white text-sm font-medium px-4 py-2.5 rounded-full shadow-lg whitespace-nowrap pointer-events-none animate-in">
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <polyline points="20 6 9 17 4 12" />
+      </svg>
+      {label}
+    </div>
+  );
+}
+
+// 共有アイコンのみのコピーボタン（コピー後はトーストで結果を表示）
 function CopyIconButton({
   label,
   copiedLabel,
@@ -33,20 +55,20 @@ function CopyIconButton({
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      disabled={disabled}
-      onClick={onClick}
-      className={`h-7 rounded-lg border flex items-center justify-center gap-1 shrink-0 transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
-        copied
-          ? "px-2 text-xs font-medium bg-[var(--success)] text-white border-[var(--success)]"
-          : "w-7 border-[var(--border)] text-[var(--muted)] enabled:hover:border-[var(--accent)] enabled:hover:text-[var(--accent)]"
-      }`}
-    >
-      {copied ? (
-        <>
+    <>
+      <button
+        type="button"
+        aria-label={label}
+        title={label}
+        disabled={disabled}
+        onClick={onClick}
+        className={`w-7 h-7 rounded-lg border flex items-center justify-center shrink-0 transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+          copied
+            ? "bg-[var(--success)] text-white border-[var(--success)]"
+            : "border-[var(--border)] text-[var(--muted)] enabled:hover:border-[var(--accent)] enabled:hover:text-[var(--accent)]"
+        }`}
+      >
+        {copied ? (
           <svg
             width="14"
             height="14"
@@ -60,26 +82,26 @@ function CopyIconButton({
           >
             <polyline points="20 6 9 17 4 12" />
           </svg>
-          {copiedLabel}
-        </>
-      ) : (
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
-          <polyline points="16 6 12 2 8 6" />
-          <line x1="12" y1="2" x2="12" y2="15" />
-        </svg>
-      )}
-    </button>
+        ) : (
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+            <polyline points="16 6 12 2 8 6" />
+            <line x1="12" y1="2" x2="12" y2="15" />
+          </svg>
+        )}
+      </button>
+      {copied && <CopyToast label={copiedLabel} />}
+    </>
   );
 }
 
