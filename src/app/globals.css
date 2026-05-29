@@ -93,6 +93,30 @@ body {
   color: var(--accent);
 }
 
+/* 保存ボタンより控えめなアクセントボタン（追加系アクション用） */
+.btn-accent-soft {
+  background: var(--accent-bg);
+  color: var(--accent);
+  border: 1.5px solid var(--accent-light);
+  padding: 0.5rem 1.25rem;
+  border-radius: 0.625rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-accent-soft:hover {
+  background: #fde9e0;
+  border-color: var(--accent);
+}
+.btn-accent-soft:active {
+  transform: translateY(1px);
+}
+.btn-accent-soft:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .btn-danger-sm {
   color: var(--muted);
   background: none;

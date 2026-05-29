@@ -1,7 +1,6 @@
 "use client";
 
 import { Fragment, useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import { Member, Expense, AppData, CustomAmount } from "@/lib/types";
 import { calculate, CalcResult } from "@/lib/calc";
 import { createEvent, getEvent, updateEvent } from "@/lib/db";
@@ -19,50 +18,284 @@ function genId() {
   return Math.random().toString(36).slice(2, 9);
 }
 
-type TabId = "settings" | "expenses" | "result";
-
-// --- CSV Buttons ---
-function CSVButtons({
-  onExport,
-  onImport,
+// 共有アイコンのみのコピーボタン（コピー後は「コピー!」を表示）
+function CopyIconButton({
+  label,
+  copiedLabel,
+  copied,
+  disabled,
+  onClick,
 }: {
-  onExport: () => void;
-  onImport: (file: File) => void;
+  label: string;
+  copiedLabel: string;
+  copied: boolean;
+  disabled?: boolean;
+  onClick: () => void;
 }) {
   return (
-    <div className="flex gap-2">
-      <button
-        className="btn-secondary text-xs !px-2.5 !py-1"
-        onClick={onExport}
-      >
-        CSV出力
-      </button>
-      <label className="btn-secondary text-xs !px-2.5 !py-1 cursor-pointer">
-        CSV読込
-        <input
-          type="file"
-          accept=".csv,.txt"
-          className="hidden"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) onImport(f);
-            e.target.value = "";
-          }}
-        />
-      </label>
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={onClick}
+      className={`h-7 rounded-lg border flex items-center justify-center gap-1 shrink-0 transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+        copied
+          ? "px-2 text-xs font-medium bg-[var(--success)] text-white border-[var(--success)]"
+          : "w-7 border-[var(--border)] text-[var(--muted)] enabled:hover:border-[var(--accent)] enabled:hover:text-[var(--accent)]"
+      }`}
+    >
+      {copied ? (
+        <>
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          {copiedLabel}
+        </>
+      ) : (
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+          <polyline points="16 6 12 2 8 6" />
+          <line x1="12" y1="2" x2="12" y2="15" />
+        </svg>
+      )}
+    </button>
+  );
+}
+
+const IconPencil = () => (
+  <svg
+    width="12"
+    height="12"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M12 20h9" />
+    <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+  </svg>
+);
+
+// --- 初回アクセス時のイベント名登録画面 ---
+function OnboardingScreen({
+  onCreate,
+  saving,
+}: {
+  onCreate: (name: string) => void;
+  saving: boolean;
+}) {
+  const [name, setName] = useState("");
+  const submit = () => {
+    const trimmed = name.trim();
+    if (trimmed) onCreate(trimmed);
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      <main className="flex-1 flex flex-col items-center justify-center px-4">
+        <div className="w-full max-w-sm card space-y-4 animate-in">
+          <div className="text-center">
+            <h1 className="text-3xl font-extrabold tracking-tight">
+              <span className="text-[var(--accent)]">¥es</span>WaliCan
+            </h1>
+            <p className="text-sm text-[var(--muted)] mt-1">
+              立替精算をかんたんに
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <label className="section-label block">イベント名</label>
+            <input
+              autoFocus
+              className="input w-full"
+              placeholder="例: 沖縄旅行 2026"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.nativeEvent.isComposing) submit();
+              }}
+            />
+          </div>
+          <button
+            className="btn-primary w-full"
+            disabled={saving || !name.trim()}
+            onClick={submit}
+          >
+            {saving ? "作成中..." : "イベントを作成"}
+          </button>
+          <p className="text-[11px] text-[var(--muted)] text-center leading-relaxed">
+            作成すると、このイベント専用のURLが発行されます。
+            <br />
+            URLを共有すれば、みんなで立替を登録できます。
+          </p>
+        </div>
+      </main>
+      <DisclaimerFooter />
     </div>
   );
 }
 
-// --- 基本設定 ---
+const IconTrash = () => (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M3 6h18" />
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    <path d="M10 11v6M14 11v6" />
+  </svg>
+);
+
+type TabId = "settings" | "expenses" | "result";
+
+// --- 一括登録メニュー（CSV出力／読込） ---
+function BulkRegisterMenu({
+  onExport,
+  onImport,
+  hint,
+}: {
+  onExport: () => void;
+  onImport: (file: File) => void;
+  hint?: string;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        className="btn-secondary text-xs !px-2.5 !py-1 inline-flex items-center gap-1"
+        onClick={() => setOpen((v) => !v)}
+      >
+        一括登録
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+          className={`transition-transform ${open ? "rotate-180" : ""}`}
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+
+      {open && (
+        <>
+          {/* 背景クリックで閉じる */}
+          <div
+            className="fixed inset-0 z-30"
+            onClick={() => setOpen(false)}
+          />
+          <div className="absolute right-0 top-full mt-1.5 z-40 w-64 bg-white border border-[var(--border)] rounded-xl shadow-lg p-3 animate-in text-left">
+            <p className="text-xs font-bold mb-1">CSVで一括登録</p>
+            <p className="text-[11px] text-[var(--muted)] leading-relaxed mb-2.5">
+              はじめは<span className="text-[var(--foreground)] font-medium">出力</span>して空のテンプレートを入手し、Excelなどで編集してから<span className="text-[var(--foreground)] font-medium">読込</span>すると一括登録できます。すでに内容があれば、その内容を書き出せます。
+            </p>
+            {hint && (
+              <p className="text-[11px] text-[var(--warning)] leading-relaxed mb-2.5">
+                {hint}
+              </p>
+            )}
+            <button
+              className="btn-secondary w-full text-xs !py-1.5 mb-1.5 flex items-center justify-center gap-1.5"
+              onClick={() => {
+                onExport();
+                setOpen(false);
+              }}
+            >
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              CSVを出力
+            </button>
+            <label className="btn-secondary w-full text-xs !py-1.5 flex items-center justify-center gap-1.5 cursor-pointer">
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+              CSVを読み込む
+              <input
+                type="file"
+                accept=".csv,.txt"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) onImport(f);
+                  e.target.value = "";
+                  setOpen(false);
+                }}
+              />
+            </label>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// --- 参加者登録 ---
 function SettingsSection({
-  eventName,
-  setEventName,
   members,
   setMembers,
 }: {
-  eventName: string;
-  setEventName: (n: string) => void;
   members: Member[];
   setMembers: (m: Member[]) => void;
 }) {
@@ -100,95 +333,104 @@ function SettingsSection({
 
   return (
     <section className="space-y-4 animate-in">
-      <div>
-        <label className="section-label mb-1.5 block">イベント名</label>
-        <input
-          className="input w-full"
-          placeholder="例: 沖縄旅行 2026"
-          value={eventName}
-          onChange={(e) => setEventName(e.target.value)}
-        />
-      </div>
-
-      <hr className="border-[var(--border)]" />
-
       <div className="flex items-center justify-between">
-        <p className="text-sm text-[var(--muted)]">参加者と負担倍率を設定</p>
-        <CSVButtons onExport={handleExport} onImport={handleImport} />
+        <p className="text-sm text-[var(--muted)]">参加者を登録</p>
+        <BulkRegisterMenu onExport={handleExport} onImport={handleImport} />
       </div>
-      <div className="flex gap-2 flex-wrap">
-        <input
-          className="input flex-1 min-w-[120px]"
-          placeholder="名前を入力"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && add()}
-        />
-        <input
-          className="input w-20"
-          type="number"
-          step="0.1"
-          min="0.1"
-          placeholder="倍率"
-          value={ratio}
-          onChange={(e) => setRatio(e.target.value)}
-        />
-        <button className="btn-primary" onClick={add}>
-          追加
-        </button>
-      </div>
-      <p className="text-xs text-[var(--muted)]">
-        倍率: 大人=1.0、子ども=0.5 など。負担額が倍率に比例します
-      </p>
-      {members.length > 0 && (
-        <div className="space-y-2">
-          {members.map((m) => (
-            <div key={m.id} className="tag">
-              <span className="font-medium flex-1">{m.name}</span>
-              <span className="text-xs text-[var(--muted)]">x</span>
-              <input
-                className="w-12 text-xs border border-[var(--border)] rounded-md px-1.5 py-0.5 text-center focus:border-[var(--accent)] outline-none"
-                type="number"
-                step="0.1"
-                min="0.1"
-                value={m.ratio}
-                onChange={(e) => updateRatio(m.id, e.target.value)}
-              />
-              <button className="btn-danger-sm" onClick={() => remove(m.id)}>
-                ✕
-              </button>
-            </div>
-          ))}
+      <div className="card space-y-4">
+        <label className="section-label block">参加者名と負担倍率</label>
+        <div className="flex gap-2 flex-wrap">
+          <input
+            className="input flex-1 min-w-[120px]"
+            placeholder="名前を入力"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.nativeEvent.isComposing) add();
+            }}
+          />
+          <div className="flex items-center gap-1">
+            <input
+              className="input w-16"
+              type="number"
+              step="0.1"
+              min="0.1"
+              placeholder="倍率"
+              value={ratio}
+              onChange={(e) => setRatio(e.target.value)}
+            />
+            <span className="text-sm text-[var(--muted)]">倍</span>
+          </div>
         </div>
-      )}
+        <div className="flex gap-2">
+          <button className="btn-accent-soft flex-1" onClick={add}>
+            + 参加者を追加
+          </button>
+        </div>
+        {members.length > 0 && (
+          <div className="space-y-2">
+            {members.map((m) => (
+              <div key={m.id} className="tag">
+                <span className="font-medium flex-1">{m.name}</span>
+                <span className="text-xs text-[var(--muted)]">x</span>
+                <input
+                  className="w-12 text-xs border border-[var(--border)] rounded-md px-1.5 py-0.5 text-center focus:border-[var(--accent)] outline-none"
+                  type="number"
+                  step="0.1"
+                  min="0.1"
+                  value={m.ratio}
+                  onChange={(e) => updateRatio(m.id, e.target.value)}
+                />
+                <span className="text-xs text-[var(--muted)]">倍</span>
+                <button
+                  className="btn-danger-sm"
+                  aria-label="削除"
+                  onClick={() => remove(m.id)}
+                >
+                  <IconTrash />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </section>
   );
 }
 
-// --- 立替登録 ---
-function ExpenseSection({
+// --- 立替入力フォーム（新規・編集で共通） ---
+function ExpenseForm({
   members,
-  expenses,
-  setExpenses,
+  initial,
+  submitLabel,
+  submitClassName = "btn-accent-soft",
+  onSubmit,
+  onCancel,
 }: {
   members: Member[];
-  expenses: Expense[];
-  setExpenses: (e: Expense[]) => void;
+  initial?: Expense;
+  submitLabel: string;
+  submitClassName?: string;
+  onSubmit: (data: Omit<Expense, "id">) => void;
+  onCancel?: () => void;
 }) {
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [title, setTitle] = useState("");
-  const [amount, setAmount] = useState("");
-  const [payerId, setPayerId] = useState("");
-  const [participantIds, setParticipantIds] = useState<string[]>([]);
-  const [useCustom, setUseCustom] = useState(false);
-  const [customAmounts, setCustomAmounts] = useState<CustomAmount[]>([]);
-
-  useEffect(() => {
-    if (!editingId) {
-      setParticipantIds(members.map((m) => m.id));
-    }
-    if (!payerId && members.length > 0) setPayerId(members[0].id);
-  }, [members, payerId, editingId]);
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [amount, setAmount] = useState(initial ? String(initial.amount) : "");
+  const [payerId, setPayerId] = useState(
+    initial?.payerId ?? members[0]?.id ?? ""
+  );
+  const [participantIds, setParticipantIds] = useState<string[]>(
+    initial ? [...initial.participantIds] : members.map((m) => m.id)
+  );
+  const [specifyBearers, setSpecifyBearers] = useState(
+    initial ? initial.participantIds.length < members.length : false
+  );
+  const [useCustom, setUseCustom] = useState(
+    initial ? initial.customAmounts.length > 0 : false
+  );
+  const [customAmounts, setCustomAmounts] = useState<CustomAmount[]>(
+    initial ? [...initial.customAmounts] : []
+  );
 
   const toggleParticipant = (id: string) => {
     setParticipantIds((prev) =>
@@ -207,22 +449,14 @@ function ExpenseSection({
     });
   };
 
-  const resetForm = () => {
-    setEditingId(null);
-    setTitle("");
-    setAmount("");
-    setUseCustom(false);
-    setCustomAmounts([]);
-    setParticipantIds(members.map((m) => m.id));
-    if (members.length > 0) setPayerId(members[0].id);
-  };
+  const memberName = (id: string) =>
+    members.find((m) => m.id === id)?.name ?? "?";
 
-  const save = () => {
+  const submit = () => {
     const amt = parseInt(amount);
     if (!title.trim() || !amt || !payerId || participantIds.length === 0)
       return;
-    const entry: Expense = {
-      id: editingId ?? genId(),
+    onSubmit({
       title: title.trim(),
       amount: amt,
       payerId,
@@ -230,28 +464,223 @@ function ExpenseSection({
       customAmounts: customAmounts.filter((c) =>
         participantIds.includes(c.memberId)
       ),
-    };
-    if (editingId) {
-      setExpenses(expenses.map((e) => (e.id === editingId ? entry : e)));
-    } else {
-      setExpenses([...expenses, entry]);
-    }
-    resetForm();
+    });
   };
 
-  const startEdit = (e: Expense) => {
-    setEditingId(e.id);
-    setTitle(e.title);
-    setAmount(String(e.amount));
-    setPayerId(e.payerId);
-    setParticipantIds([...e.participantIds]);
-    setCustomAmounts([...e.customAmounts]);
-    setUseCustom(e.customAmounts.length > 0);
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="section-label mb-1.5 block">支払った人</label>
+        <select
+          className="input w-full cursor-pointer"
+          value={payerId}
+          onChange={(e) => setPayerId(e.target.value)}
+        >
+          {members.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label className="section-label mb-1.5 block">支払った内容</label>
+        <div className="flex gap-2 flex-wrap">
+          <input
+            className="input flex-1 min-w-[120px]"
+            placeholder="例: 夕食代"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+          <div className="flex items-center gap-1">
+            <input
+              className="input w-28"
+              type="number"
+              placeholder="金額"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+            <span className="text-sm text-[var(--muted)]">円</span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <label className="flex items-center gap-2 text-sm cursor-pointer text-[var(--muted)] hover:text-[var(--foreground)] transition-colors">
+          <input
+            type="checkbox"
+            checked={specifyBearers}
+            onChange={(e) => {
+              const on = e.target.checked;
+              setSpecifyBearers(on);
+              // オンにしたら全員チェックなし、オフに戻したら全員を負担対象に
+              setParticipantIds(on ? [] : members.map((m) => m.id));
+            }}
+            className="sr-only"
+          />
+          <span
+            className={`w-9 h-5 rounded-full relative transition-all ${
+              specifyBearers ? "bg-[var(--accent)]" : "bg-[var(--border)]"
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${
+                specifyBearers ? "left-4" : "left-0.5"
+              }`}
+            />
+          </span>
+          特定の負担者を指定する
+        </label>
+      </div>
+
+      {specifyBearers && (
+        <div className="animate-in">
+          <p className="text-xs text-[var(--muted)] mb-1.5">
+            チェックした人で負担します（チェックを外した人は負担しません）
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {members.map((m) => (
+              <label
+                key={m.id}
+                className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border cursor-pointer transition-all ${
+                  participantIds.includes(m.id)
+                    ? "bg-[var(--accent-bg)] border-[var(--accent-light)]"
+                    : "bg-white border-[var(--border)] text-[var(--muted)]"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={participantIds.includes(m.id)}
+                  onChange={() => toggleParticipant(m.id)}
+                  className="sr-only"
+                />
+                <span
+                  className={`w-4 h-4 rounded border-2 flex items-center justify-center text-xs transition-all ${
+                    participantIds.includes(m.id)
+                      ? "bg-[var(--accent)] border-[var(--accent)] text-white"
+                      : "border-[var(--border)]"
+                  }`}
+                >
+                  {participantIds.includes(m.id) && "✓"}
+                </span>
+                {m.name}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div>
+        <label className="flex items-center gap-2 text-sm cursor-pointer text-[var(--muted)] hover:text-[var(--foreground)] transition-colors">
+          <input
+            type="checkbox"
+            checked={useCustom}
+            onChange={(e) => setUseCustom(e.target.checked)}
+            className="sr-only"
+          />
+          <span
+            className={`w-9 h-5 rounded-full relative transition-all ${
+              useCustom ? "bg-[var(--accent)]" : "bg-[var(--border)]"
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${
+                useCustom ? "left-4" : "left-0.5"
+              }`}
+            />
+          </span>
+          個別に負担額を指定する
+        </label>
+      </div>
+
+      {useCustom && (
+        <div className="space-y-2 bg-[#fffbeb] border border-[#fde68a] rounded-xl p-3 animate-in">
+          <p className="text-xs text-[var(--warning)] font-medium">
+            金額を指定した人は固定額、空欄の人は残額を倍率で按分します
+          </p>
+          {participantIds.map((id) => (
+            <div key={id} className="flex items-center gap-2 text-sm">
+              <span className="w-20 font-medium">{memberName(id)}</span>
+              <div className="flex items-center gap-1">
+                <input
+                  className="input w-24 text-sm"
+                  type="number"
+                  placeholder="自動按分"
+                  value={
+                    customAmounts.find((c) => c.memberId === id)?.amount ?? ""
+                  }
+                  onChange={(e) => setCustomAmount(id, e.target.value)}
+                />
+                <span className="text-xs text-[var(--muted)]">円</span>
+              </div>
+            </div>
+          ))}
+          <div className="flex justify-end pt-1">
+            <button
+              className="btn-secondary text-xs !px-2.5 !py-1 whitespace-nowrap"
+              onClick={() => {
+                const filled = participantIds
+                  .filter((id) => !customAmounts.some((c) => c.memberId === id))
+                  .map((id) => ({ memberId: id, amount: 0 }));
+                setCustomAmounts([...customAmounts, ...filled]);
+              }}
+            >
+              空欄に0を入力
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        {onCancel && (
+          <button className="btn-secondary flex-1" onClick={onCancel}>
+            キャンセル
+          </button>
+        )}
+        <button className={`${submitClassName} flex-1`} onClick={submit}>
+          {submitLabel}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// --- 立替登録 ---
+function ExpenseSection({
+  members,
+  expenses,
+  setExpenses,
+  onCopyRequest,
+  copied,
+  saving,
+}: {
+  members: Member[];
+  expenses: Expense[];
+  setExpenses: (e: Expense[]) => void;
+  onCopyRequest: () => void;
+  copied: boolean;
+  saving: boolean;
+}) {
+  const [editing, setEditing] = useState<Expense | null>(null);
+  const [formKey, setFormKey] = useState(0);
+
+  const addExpense = (data: Omit<Expense, "id">) => {
+    setExpenses([...expenses, { id: genId(), ...data }]);
+    setFormKey((k) => k + 1); // 入力フォームをリセット
+  };
+
+  const updateExpense = (data: Omit<Expense, "id">) => {
+    if (!editing) return;
+    setExpenses(
+      expenses.map((e) => (e.id === editing.id ? { ...data, id: editing.id } : e))
+    );
+    setEditing(null);
   };
 
   const remove = (id: string) => {
     setExpenses(expenses.filter((e) => e.id !== id));
-    if (editingId === id) resetForm();
+    if (editing?.id === id) setEditing(null);
   };
 
   const memberName = (id: string) =>
@@ -268,175 +697,44 @@ function ExpenseSection({
   return (
     <section className="space-y-4 animate-in">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-[var(--muted)]">立替えた支払いを記録</p>
-        <CSVButtons onExport={handleExport} onImport={handleImport} />
+        <div className="flex items-center gap-2">
+          <p className="text-sm text-[var(--muted)]">立替えた支払いを登録</p>
+          <CopyIconButton
+            label="登録依頼用の文章をコピー"
+            copiedLabel="依頼文をコピーしました！"
+            copied={copied}
+            disabled={saving || members.length < 2}
+            onClick={onCopyRequest}
+          />
+        </div>
+        <BulkRegisterMenu
+          onExport={handleExport}
+          onImport={handleImport}
+          hint="※ 支払者・負担者の列には、参加者登録で登録済みの参加者名を入力してください。"
+        />
       </div>
 
-      {members.length < 2 ? (
-        <div className="text-center py-8 text-[var(--muted)] text-sm">
-          基本設定でメンバーを2人以上追加してください
-        </div>
-      ) : (
-        <div className="space-y-3">
-          <div>
-            <label className="section-label mb-1.5 block">支払った人</label>
-            <div className="flex flex-wrap gap-1.5">
-              {members.map((m) => (
-                <button
-                  key={m.id}
-                  className={`text-sm px-3 py-1.5 rounded-lg border transition-all ${
-                    payerId === m.id
-                      ? "bg-[var(--accent)] text-white border-[var(--accent)] shadow-sm"
-                      : "bg-white border-[var(--border)] hover:border-[var(--accent-light)]"
-                  }`}
-                  onClick={() => setPayerId(m.id)}
-                >
-                  {m.name}
-                </button>
-              ))}
-            </div>
+      <div className="card space-y-4">
+        {members.length < 2 ? (
+          <div className="text-center py-8 text-[var(--muted)] text-sm">
+            「参加者登録」で参加者を2人以上追加してください
           </div>
+        ) : (
+          <ExpenseForm
+            key={formKey}
+            members={members}
+            submitLabel="+ 立替を追加"
+            onSubmit={addExpense}
+          />
+        )}
 
-          <div>
-            <label className="section-label mb-1.5 block">支払った内容</label>
-            <div className="flex gap-2 flex-wrap">
-              <input
-                className="input flex-1 min-w-[120px]"
-                placeholder="例: 夕食代"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-              />
-              <div className="flex items-center gap-1">
-                <input
-                  className="input w-28"
-                  type="number"
-                  placeholder="金額"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                />
-                <span className="text-sm text-[var(--muted)]">円</span>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <label className="section-label mb-1.5 block">負担する人</label>
-            <div className="flex flex-wrap gap-1.5">
-              {members.map((m) => (
-                <label
-                  key={m.id}
-                  className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border cursor-pointer transition-all ${
-                    participantIds.includes(m.id)
-                      ? "bg-[var(--accent-bg)] border-[var(--accent-light)]"
-                      : "bg-white border-[var(--border)]"
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={participantIds.includes(m.id)}
-                    onChange={() => toggleParticipant(m.id)}
-                    className="sr-only"
-                  />
-                  <span
-                    className={`w-4 h-4 rounded border-2 flex items-center justify-center text-xs transition-all ${
-                      participantIds.includes(m.id)
-                        ? "bg-[var(--accent)] border-[var(--accent)] text-white"
-                        : "border-[var(--border)]"
-                    }`}
-                  >
-                    {participantIds.includes(m.id) && "✓"}
-                  </span>
-                  {m.name}
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="flex items-center gap-2 text-sm cursor-pointer text-[var(--muted)] hover:text-[var(--foreground)] transition-colors">
-              <input
-                type="checkbox"
-                checked={useCustom}
-                onChange={(e) => setUseCustom(e.target.checked)}
-                className="sr-only"
-              />
-              <span
-                className={`w-9 h-5 rounded-full relative transition-all ${
-                  useCustom ? "bg-[var(--accent)]" : "bg-[var(--border)]"
-                }`}
-              >
-                <span
-                  className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${
-                    useCustom ? "left-4" : "left-0.5"
-                  }`}
-                />
-              </span>
-              個別に負担額を指定する
-            </label>
-          </div>
-
-          {useCustom && (
-            <div className="space-y-2 bg-[#fffbeb] border border-[#fde68a] rounded-xl p-3 animate-in">
-              <p className="text-xs text-[var(--warning)] font-medium">
-                金額を指定した人は固定額、空欄の人は残額を倍率で按分します
-              </p>
-              {participantIds.map((id) => (
-                <div key={id} className="flex items-center gap-2 text-sm">
-                  <span className="w-20 font-medium">{memberName(id)}</span>
-                  <div className="flex items-center gap-1">
-                    <input
-                      className="input w-24 text-sm"
-                      type="number"
-                      placeholder="自動按分"
-                      value={
-                        customAmounts.find((c) => c.memberId === id)?.amount ??
-                        ""
-                      }
-                      onChange={(e) => setCustomAmount(id, e.target.value)}
-                    />
-                    <span className="text-xs text-[var(--muted)]">円</span>
-                  </div>
-                </div>
-              ))}
-              <div className="flex justify-end pt-1">
-                <button
-                  className="btn-secondary text-xs !px-2.5 !py-1 whitespace-nowrap"
-                  onClick={() => {
-                    const filled = participantIds
-                      .filter(
-                        (id) =>
-                          !customAmounts.some((c) => c.memberId === id)
-                      )
-                      .map((id) => ({ memberId: id, amount: 0 }));
-                    setCustomAmounts([...customAmounts, ...filled]);
-                  }}
-                >
-                  空欄に0を入力
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div className="flex gap-2">
-            {editingId && (
-              <button className="btn-secondary flex-1" onClick={resetForm}>
-                キャンセル
-              </button>
-            )}
-            <button className="btn-primary flex-1" onClick={save}>
-              {editingId ? "更新する" : "+ 立替を追加"}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {expenses.length > 0 && (
-        <div className="space-y-2">
-          {expenses.map((e) => (
+        {expenses.length > 0 && (
+          <div className="space-y-2">
+            {expenses.map((e) => (
             <div
               key={e.id}
               className={`expense-item animate-in ${
-                editingId === e.id ? "!border-[var(--accent)]" : ""
+                editing?.id === e.id ? "!border-[var(--accent)]" : ""
               }`}
             >
               <div>
@@ -451,12 +749,16 @@ function ExpenseSection({
               <div className="flex items-center gap-1">
                 <button
                   className="btn-danger-sm !text-[var(--accent)]"
-                  onClick={() => startEdit(e)}
+                  onClick={() => setEditing(e)}
                 >
                   編集
                 </button>
-                <button className="btn-danger-sm" onClick={() => remove(e.id)}>
-                  ✕
+                <button
+                  className="btn-danger-sm"
+                  aria-label="削除"
+                  onClick={() => remove(e.id)}
+                >
+                  <IconTrash />
                 </button>
               </div>
             </div>
@@ -464,6 +766,38 @@ function ExpenseSection({
           <div className="text-right text-sm font-medium text-[var(--muted)] pt-1">
             合計: ¥
             {expenses.reduce((s, e) => s + e.amount, 0).toLocaleString()}
+          </div>
+        </div>
+        )}
+      </div>
+
+      {/* 編集モーダル */}
+      {editing && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+          onClick={() => setEditing(null)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-auto p-5 animate-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-base">立替を編集</h3>
+              <button
+                className="btn-secondary text-sm !px-3 !py-1"
+                onClick={() => setEditing(null)}
+              >
+                閉じる
+              </button>
+            </div>
+            <ExpenseForm
+              members={members}
+              initial={editing}
+              submitLabel="更新する"
+              submitClassName="btn-primary"
+              onSubmit={updateExpense}
+              onCancel={() => setEditing(null)}
+            />
           </div>
         </div>
       )}
@@ -719,15 +1053,18 @@ function CopySettlementsButton({
   settlements,
   name,
   eventUrl,
+  eventName,
 }: {
   settlements: { fromId: string; toId: string; amount: number }[];
   name: (id: string) => string;
   eventUrl?: string;
+  eventName?: string;
 }) {
   const [copied, setCopied] = useState(false);
   const copy = () => {
     const lines = settlements
       .map((s) => `${name(s.fromId)} → ${name(s.toId)}: ¥${s.amount.toLocaleString()}`);
+    if (eventName?.trim()) lines.unshift(`【${eventName.trim()}】`, "");
     if (eventUrl) lines.push("", eventUrl);
     const text = lines.join("\n");
     navigator.clipboard.writeText(text).then(() => {
@@ -736,12 +1073,12 @@ function CopySettlementsButton({
     });
   };
   return (
-    <button
-      className={`btn-secondary text-xs w-full hover:!bg-white ${copied ? "!bg-[var(--success)] !text-white !border-[var(--success)]" : ""}`}
+    <CopyIconButton
+      label="精算方法をテキストでコピー"
+      copiedLabel="精算方法をコピーしました！"
+      copied={copied}
       onClick={copy}
-    >
-      {copied ? "✓ コピーしました" : "テキストでコピー"}
-    </button>
+    />
   );
 }
 
@@ -749,10 +1086,12 @@ function ResultSection({
   members,
   result,
   eventUrl,
+  eventName,
 }: {
   members: Member[];
   result: CalcResult | null;
   eventUrl?: string;
+  eventName?: string;
 }) {
   const name = (id: string) => members.find((m) => m.id === id)?.name ?? "?";
 
@@ -812,9 +1151,12 @@ function ResultSection({
 
   if (!result) {
     return (
-      <section className="animate-in">
-        <div className="text-center py-12 text-[var(--muted)] text-sm">
-          基本設定と立替を登録すると精算結果が表示されます
+      <section className="space-y-4 animate-in">
+        <p className="text-sm text-[var(--muted)]">精算結果を確認</p>
+        <div className="card">
+          <div className="text-center py-12 text-[var(--muted)] text-sm">
+            参加者と立替を登録すると精算結果が表示されます
+          </div>
         </div>
       </section>
     );
@@ -822,52 +1164,67 @@ function ResultSection({
 
   return (
     <section className="space-y-5 animate-in">
-      {result.settlements.length > 0 ? (
-        <div className="space-y-2">
-          {result.settlements.map((s, i) => (
-            <div key={i} className="settlement-card animate-in">
-              <span className="font-semibold">{name(s.fromId)}</span>
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 20 20"
-                fill="none"
-                className="text-[var(--accent)] shrink-0"
-              >
-                <path
-                  d="M4 10h12m0 0l-4-4m4 4l-4 4"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              <span className="font-semibold">{name(s.toId)}</span>
-              <span className="ml-auto text-lg font-bold text-[var(--accent)]">
-                ¥{s.amount.toLocaleString()}
-              </span>
-            </div>
-          ))}
-          <CopySettlementsButton settlements={result.settlements} name={name} eventUrl={eventUrl} />
-        </div>
-      ) : (
-        <div className="text-center py-4 text-[var(--muted)] text-sm">
-          精算は不要です
-        </div>
-      )}
+      <div className="flex items-center gap-2">
+        <p className="text-sm text-[var(--muted)]">精算結果を確認</p>
+        {result.settlements.length > 0 && (
+          <CopySettlementsButton
+            settlements={result.settlements}
+            name={name}
+            eventUrl={eventUrl}
+            eventName={eventName}
+          />
+        )}
+      </div>
+      <div className="card space-y-5">
+      <div>
+        <h3 className="section-label mb-2">精算方法</h3>
+        {result.settlements.length > 0 ? (
+          <div className="space-y-2">
+            {result.settlements.map((s, i) => (
+              <div key={i} className="settlement-card animate-in">
+                <span className="font-semibold">{name(s.fromId)}</span>
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  className="text-[var(--accent)] shrink-0"
+                >
+                  <path
+                    d="M4 10h12m0 0l-4-4m4 4l-4 4"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                <span className="font-semibold">{name(s.toId)}</span>
+                <span className="ml-auto text-lg font-bold text-[var(--accent)]">
+                  ¥{s.amount.toLocaleString()}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-4 text-[var(--muted)] text-sm">
+            精算は不要です
+          </div>
+        )}
+      </div>
 
-      <BreakdownTable
-        members={members}
-        result={result}
-        name={name}
-        exportResultCSV={exportResultCSV}
-      />
+        <BreakdownTable
+          members={members}
+          result={result}
+          name={name}
+          exportResultCSV={exportResultCSV}
+        />
+      </div>
     </section>
   );
 }
 
 // --- ステップ ---
-const IconSettings = () => (
+const IconPeople = () => (
   <svg
     width="16"
     height="16"
@@ -879,8 +1236,10 @@ const IconSettings = () => (
     strokeLinejoin="round"
     aria-hidden="true"
   >
-    <circle cx="12" cy="12" r="3" />
-    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
   </svg>
 );
 
@@ -925,14 +1284,13 @@ const STEPS: {
   Icon: () => React.ReactElement;
   step: number;
 }[] = [
-  { id: "settings", label: "基本設定", Icon: IconSettings, step: 1 },
+  { id: "settings", label: "参加者登録", Icon: IconPeople, step: 1 },
   { id: "expenses", label: "立替登録", Icon: IconExpense, step: 2 },
   { id: "result", label: "精算結果", Icon: IconResult, step: 3 },
 ];
 
 // --- メインApp ---
 export default function EventApp({ eventId }: { eventId?: string }) {
-  const router = useRouter();
   const [id, setId] = useState<string | undefined>(eventId);
   const [eventName, setEventName] = useState("");
   const [members, setMembers] = useState<Member[]>([]);
@@ -948,7 +1306,7 @@ export default function EventApp({ eventId }: { eventId?: string }) {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(!!eventId);
   const [copied, setCopied] = useState(false);
-  const [showHelp, setShowHelp] = useState(false);
+  const [editingName, setEditingName] = useState(false);
 
   // 既存イベント読み込み
   useEffect(() => {
@@ -963,6 +1321,12 @@ export default function EventApp({ eventId }: { eventId?: string }) {
       setLoading(false);
     })();
   }, [eventId]);
+
+  // 現在のタブをURLのハッシュに同期（保存後はページごとに固有のURLになる）
+  useEffect(() => {
+    if (loading || !id) return;
+    window.history.replaceState(null, "", `/e/${id}#${activeTab}`);
+  }, [activeTab, id, loading]);
 
   const data: AppData = { members, expenses };
   const result =
@@ -980,7 +1344,8 @@ export default function EventApp({ eventId }: { eventId?: string }) {
           const newId = await createEvent(eventName, data);
           if (newId) {
             setId(newId);
-            router.replace(`/e/${newId}#${nextTab}`);
+            // 同一コンポーネントを保ったままURLだけ更新（ルート遷移＝再マウントを避ける）
+            window.history.replaceState(null, "", `/e/${newId}#${nextTab}`);
           }
         }
       } finally {
@@ -988,33 +1353,62 @@ export default function EventApp({ eventId }: { eventId?: string }) {
       }
       setActiveTab(nextTab);
     },
-    [id, eventName, data, router]
+    [id, eventName, data]
   );
 
-  const saveAndCopyUrl = useCallback(async () => {
+  const saveAndCopyUrl = useCallback(
+    async (hash?: TabId, message?: string) => {
+      setSaving(true);
+      try {
+        let eventId = id;
+        if (eventId) {
+          await updateEvent(eventId, eventName, data);
+        } else {
+          const newId = await createEvent(eventName, data);
+          if (newId) {
+            eventId = newId;
+            setId(newId);
+            window.history.replaceState(null, "", `/e/${newId}`);
+          }
+        }
+        if (eventId) {
+          const url = `${window.location.origin}/e/${eventId}${
+            hash ? `#${hash}` : ""
+          }`;
+          const prefix = eventName.trim() ? `【${eventName.trim()}】\n\n` : "";
+          const text = message ? `${prefix}${message}\n${url}` : `${prefix}${url}`;
+          await navigator.clipboard.writeText(text);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        }
+      } finally {
+        setSaving(false);
+      }
+    },
+    [id, eventName, data]
+  );
+
+  // 初回: イベント名を登録して専用URLを発行 → 参加者登録へ
+  const createAndStart = useCallback(async (name: string) => {
     setSaving(true);
     try {
-      let eventId = id;
-      if (eventId) {
-        await updateEvent(eventId, eventName, data);
-      } else {
-        const newId = await createEvent(eventName, data);
-        if (newId) {
-          eventId = newId;
-          setId(newId);
-          router.replace(`/e/${newId}`);
-        }
-      }
-      if (eventId) {
-        const url = `${window.location.origin}/e/${eventId}`;
-        await navigator.clipboard.writeText(url);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+      const newId = await createEvent(name, { members: [], expenses: [] });
+      if (newId) {
+        setEventName(name);
+        setId(newId);
+        window.history.replaceState(null, "", `/e/${newId}#settings`);
+        setActiveTab("settings");
       }
     } finally {
       setSaving(false);
     }
-  }, [id, eventName, data, router]);
+  }, []);
+
+  // ヘッダーのイベント名を編集して保存
+  const commitEventName = useCallback(async () => {
+    setEditingName(false);
+    if (id) await updateEvent(id, eventName, data);
+  }, [id, eventName, data]);
 
   if (loading) {
     return (
@@ -1024,94 +1418,54 @@ export default function EventApp({ eventId }: { eventId?: string }) {
     );
   }
 
+  // 未作成（初回アクセス）はイベント名登録画面を表示
+  if (!id) {
+    return <OnboardingScreen onCreate={createAndStart} saving={saving} />;
+  }
+
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
       <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-[var(--border)]">
         <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
-          <div>
-            <a href="/" target="_blank" rel="noopener noreferrer" className="block">
+          <div className="flex items-center gap-3 min-w-0">
+            <a
+              href="/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block shrink-0"
+            >
               <h1 className="text-2xl font-extrabold tracking-tight hover:opacity-80 transition-opacity">
                 <span className="text-[var(--accent)]">¥es</span>WaliCan
               </h1>
             </a>
-            {eventName ? (
-              <p className="text-xs text-[var(--foreground)] font-medium">
-                {eventName}
-              </p>
+            {editingName ? (
+              <input
+                autoFocus
+                className="text-sm font-medium border border-[var(--border)] rounded px-1.5 py-1 outline-none focus:border-[var(--accent)] min-w-0 flex-1 max-w-[12rem]"
+                value={eventName}
+                onChange={(e) => setEventName(e.target.value)}
+                onBlur={commitEventName}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.nativeEvent.isComposing)
+                    commitEventName();
+                }}
+              />
             ) : (
-              <p className="text-xs text-[var(--muted)]">
-                立替精算をかんたんに
-              </p>
-            )}
-          </div>
-          <div className="flex items-center gap-1.5">
-            <button
-              className={`text-sm px-3 py-1.5 rounded-lg border transition-all flex items-center gap-1.5 ${
-                copied
-                  ? "bg-[var(--success)] text-white border-[var(--success)]"
-                  : "border-[var(--border)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
-              }`}
-              disabled={saving}
-              onClick={saveAndCopyUrl}
-            >
-              {copied ? (
-                <>
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                  コピー!
-                </>
-              ) : saving ? (
-                "保存中..."
-              ) : (
-                <>
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                  </svg>
-                  保存してURLをコピー
-                </>
-              )}
-            </button>
-            <span className="relative group">
               <button
                 type="button"
-                aria-label="ヘルプ"
-                className="w-5 h-5 rounded-full bg-[var(--border)] text-[var(--muted)] text-xs flex items-center justify-center cursor-help"
-                onClick={() => setShowHelp((v) => !v)}
-                onBlur={() => setShowHelp(false)}
+                onClick={() => setEditingName(true)}
+                title="クリックして編集"
+                className="group inline-flex items-center gap-1 min-w-0 text-sm text-[var(--foreground)] font-medium hover:text-[var(--accent)] transition-colors"
               >
-                ?
+                <span className="truncate">
+                  {eventName || "（イベント名未設定）"}
+                </span>
+                <span className="shrink-0 text-[var(--muted)] opacity-50 group-hover:opacity-100 group-hover:text-[var(--accent)] transition-all">
+                  <IconPencil />
+                </span>
               </button>
-              <span
-                className={`absolute right-0 top-7 w-52 bg-[var(--foreground)] text-white text-xs rounded-lg px-3 py-2 pointer-events-none group-hover:opacity-100 transition-opacity z-20 leading-relaxed ${
-                  showHelp ? "opacity-100" : "opacity-0"
-                }`}
-              >
-                保存するとイベント固有のURLが発行されます
-              </span>
-            </span>
+            )}
           </div>
         </div>
 
@@ -1151,28 +1505,29 @@ export default function EventApp({ eventId }: { eventId?: string }) {
 
       {/* Main */}
       <main className="max-w-lg mx-auto w-full px-4 pt-5 space-y-4 flex-1">
-        <div className="card">
-          {activeTab === "settings" && (
-            <SettingsSection
-              eventName={eventName}
-              setEventName={setEventName}
-              members={members}
-              setMembers={setMembers}
-            />
-          )}
+        {activeTab === "settings" && (
+          <SettingsSection members={members} setMembers={setMembers} />
+        )}
 
-          {activeTab === "expenses" && (
-            <ExpenseSection
-              members={members}
-              expenses={expenses}
-              setExpenses={setExpenses}
-            />
-          )}
+        {activeTab === "expenses" && (
+          <ExpenseSection
+            members={members}
+            expenses={expenses}
+            setExpenses={setExpenses}
+            copied={copied}
+            saving={saving}
+            onCopyRequest={() =>
+              saveAndCopyUrl(
+                "expenses",
+                "ご自身が立替えた支払いを登録してください"
+              )
+            }
+          />
+        )}
 
-          {activeTab === "result" && (
-            <ResultSection members={members} result={result} eventUrl={id ? `${typeof window !== "undefined" ? window.location.origin : ""}/e/${id}#result` : undefined} />
-          )}
-        </div>
+        {activeTab === "result" && (
+          <ResultSection members={members} result={result} eventName={eventName} eventUrl={id ? `${typeof window !== "undefined" ? window.location.origin : ""}/e/${id}#result` : undefined} />
+        )}
 
         {/* ナビゲーションボタン */}
         <div className="flex gap-3">
@@ -1183,25 +1538,23 @@ export default function EventApp({ eventId }: { eventId?: string }) {
                 setActiveTab(activeTab === "result" ? "expenses" : "settings")
               }
             >
-              ← 戻る
+              戻る
             </button>
           )}
           {activeTab !== "result" && (
             <button
-              className="btn-primary flex-1"
+              className="btn-primary flex-1 inline-flex items-center justify-center"
               disabled={saving}
               onClick={() =>
                 save(activeTab === "settings" ? "expenses" : "result")
               }
             >
-              {saving
-                ? "保存中..."
-                : `保存して次へ →`}
+              {saving ? "保存中..." : "保存して次へ"}
             </button>
           )}
           {activeTab === "result" && (
             <button
-              className="btn-primary flex-1"
+              className="btn-primary flex-1 inline-flex items-center justify-center"
               disabled={saving}
               onClick={() => save("result")}
             >
