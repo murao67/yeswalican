@@ -1386,7 +1386,12 @@ export default function EventApp({ eventId }: { eventId?: string }) {
   const saveAndCopyUrl = useCallback(
     async (hash?: TabId, message?: string) => {
       setSaving(true);
-      try {
+      // 保存（DB通信）を await してから clipboard.writeText を呼ぶと、
+      // iOS Safari などではユーザー操作の許可（transient activation）が
+      // 切れて書き込みが無言で失敗し、共有ボタンが無反応になる。
+      // そこで保存＋共有文の生成を Promise にまとめ、クリップボードへの
+      // 書き込み自体はクリック直後に同期的に開始する。
+      const buildShareText = async () => {
         let eventId = id;
         if (eventId) {
           await updateEvent(eventId, eventName, data);
@@ -1398,16 +1403,32 @@ export default function EventApp({ eventId }: { eventId?: string }) {
             window.history.replaceState(null, "", `/e/${newId}`);
           }
         }
-        if (eventId) {
-          const url = `${window.location.origin}/e/${eventId}${
-            hash ? `#${hash}` : ""
-          }`;
-          const prefix = eventName.trim() ? `【${eventName.trim()}】\n\n` : "";
-          const text = message ? `${prefix}${message}\n${url}` : `${prefix}${url}`;
-          await navigator.clipboard.writeText(text);
-          setCopied(true);
-          setTimeout(() => setCopied(false), 2000);
+        if (!eventId) throw new Error("イベントの保存に失敗しました");
+        const url = `${window.location.origin}/e/${eventId}${
+          hash ? `#${hash}` : ""
+        }`;
+        const prefix = eventName.trim() ? `【${eventName.trim()}】\n\n` : "";
+        return message ? `${prefix}${message}\n${url}` : `${prefix}${url}`;
+      };
+
+      try {
+        if (typeof ClipboardItem !== "undefined") {
+          // write() をクリック直後に同期的に呼ぶことで許可を維持する。
+          // テキストは保存完了後に解決される Promise として渡す。
+          await navigator.clipboard.write([
+            new ClipboardItem({
+              "text/plain": buildShareText().then(
+                (t) => new Blob([t], { type: "text/plain" })
+              ),
+            }),
+          ]);
+        } else {
+          await navigator.clipboard.writeText(await buildShareText());
         }
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch {
+        // 保存またはコピーに失敗した場合はトーストを出さない
       } finally {
         setSaving(false);
       }
