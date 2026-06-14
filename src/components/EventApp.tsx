@@ -204,6 +204,56 @@ const IconTrash = () => (
   </svg>
 );
 
+// --- 削除確認モーダル（参加者・立替の削除で共通利用） ---
+function ConfirmModal({
+  title,
+  message,
+  confirmLabel = "削除する",
+  onConfirm,
+  onCancel,
+}: {
+  title: string;
+  message: React.ReactNode;
+  confirmLabel?: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCancel();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onCancel]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+      onClick={onCancel}
+    >
+      <div
+        className="bg-white rounded-xl shadow-2xl w-full max-w-xs p-5 animate-in"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
+        <h3 className="font-bold text-base mb-2">{title}</h3>
+        <div className="text-sm text-[var(--muted)] leading-relaxed mb-5">
+          {message}
+        </div>
+        <div className="flex gap-2">
+          <button className="btn-secondary flex-1" onClick={onCancel}>
+            キャンセル
+          </button>
+          <button className="btn-danger flex-1" onClick={onConfirm}>
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 type TabId = "settings" | "expenses" | "result";
 
 // --- 一括登録メニュー（CSV出力／読込） ---
@@ -331,6 +381,8 @@ function SettingsSection({
   const [ratio, setRatio] = useState("1");
   // 編集中の倍率は文字列のまま保持し、空欄を許容する
   const [ratioDrafts, setRatioDrafts] = useState<Record<string, string>>({});
+  // 削除確認の対象となる参加者（null のときはモーダル非表示）
+  const [pendingDelete, setPendingDelete] = useState<Member | null>(null);
 
   const add = () => {
     const trimmed = name.trim();
@@ -429,7 +481,7 @@ function SettingsSection({
                 <button
                   className="btn-danger-sm"
                   aria-label="削除"
-                  onClick={() => remove(m.id)}
+                  onClick={() => setPendingDelete(m)}
                 >
                   <IconTrash />
                 </button>
@@ -438,6 +490,25 @@ function SettingsSection({
           </div>
         )}
       </div>
+
+      {pendingDelete && (
+        <ConfirmModal
+          title="参加者を削除"
+          message={
+            <>
+              「<span className="font-medium text-[var(--foreground)]">
+                {pendingDelete.name}
+              </span>
+              」を削除しますか？
+            </>
+          }
+          onConfirm={() => {
+            remove(pendingDelete.id);
+            setPendingDelete(null);
+          }}
+          onCancel={() => setPendingDelete(null)}
+        />
+      )}
     </section>
   );
 }
@@ -708,6 +779,8 @@ function ExpenseSection({
 }) {
   const [editing, setEditing] = useState<Expense | null>(null);
   const [formKey, setFormKey] = useState(0);
+  // 削除確認の対象となる立替（null のときはモーダル非表示）
+  const [pendingDelete, setPendingDelete] = useState<Expense | null>(null);
 
   const addExpense = (data: Omit<Expense, "id">) => {
     setExpenses([...expenses, { id: genId(), ...data }]);
@@ -800,7 +873,7 @@ function ExpenseSection({
                 <button
                   className="btn-danger-sm"
                   aria-label="削除"
-                  onClick={() => remove(e.id)}
+                  onClick={() => setPendingDelete(e)}
                 >
                   <IconTrash />
                 </button>
@@ -844,6 +917,26 @@ function ExpenseSection({
             />
           </div>
         </div>
+      )}
+
+      {/* 削除確認モーダル */}
+      {pendingDelete && (
+        <ConfirmModal
+          title="立替を削除"
+          message={
+            <>
+              「<span className="font-medium text-[var(--foreground)]">
+                {pendingDelete.title}
+              </span>
+              」（¥{pendingDelete.amount.toLocaleString()}）を削除しますか？
+            </>
+          }
+          onConfirm={() => {
+            remove(pendingDelete.id);
+            setPendingDelete(null);
+          }}
+          onCancel={() => setPendingDelete(null)}
+        />
       )}
     </section>
   );
