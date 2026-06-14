@@ -1688,7 +1688,7 @@ export default function EventApp({ eventId }: { eventId?: string }) {
           )}
           {activeTab !== "result" && (
             <button
-              className="btn-accent-soft flex-1 inline-flex items-center justify-center"
+              className="btn-primary flex-1 inline-flex items-center justify-center"
               disabled={saving}
               onClick={() => save(activeTab)}
             >
@@ -1697,7 +1697,7 @@ export default function EventApp({ eventId }: { eventId?: string }) {
           )}
           {activeTab !== "result" && (
             <button
-              className="btn-primary flex-1"
+              className="btn-secondary flex-1"
               onClick={() =>
                 setActiveTab(activeTab === "settings" ? "expenses" : "result")
               }
