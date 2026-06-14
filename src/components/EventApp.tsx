@@ -1688,13 +1688,21 @@ export default function EventApp({ eventId }: { eventId?: string }) {
           )}
           {activeTab !== "result" && (
             <button
-              className="btn-primary flex-1 inline-flex items-center justify-center"
+              className="btn-accent-soft flex-1 inline-flex items-center justify-center"
               disabled={saving}
+              onClick={() => save(activeTab)}
+            >
+              {saving ? "保存中..." : "保存"}
+            </button>
+          )}
+          {activeTab !== "result" && (
+            <button
+              className="btn-primary flex-1"
               onClick={() =>
-                save(activeTab === "settings" ? "expenses" : "result")
+                setActiveTab(activeTab === "settings" ? "expenses" : "result")
               }
             >
-              {saving ? "保存中..." : "保存して次へ"}
+              次へ
             </button>
           )}
         </div>
