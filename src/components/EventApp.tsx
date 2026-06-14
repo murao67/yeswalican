@@ -1350,6 +1350,10 @@ export default function EventApp({ eventId }: { eventId?: string }) {
   const [loading, setLoading] = useState(!!eventId);
   const [copied, setCopied] = useState(false);
   const [editingName, setEditingName] = useState(false);
+  // 楽観ロック用。読み込み or 最後に保存した時点の updated_at を保持する。
+  const [baseUpdatedAt, setBaseUpdatedAt] = useState<string | null>(null);
+  // 他者が先に更新していて保存できなかったときに true。
+  const [conflict, setConflict] = useState(false);
 
   // 既存イベント読み込み
   useEffect(() => {
@@ -1360,6 +1364,7 @@ export default function EventApp({ eventId }: { eventId?: string }) {
         setEventName(event.name);
         setMembers(event.data.members);
         setExpenses(event.data.expenses);
+        setBaseUpdatedAt(event.updated_at);
       }
       setLoading(false);
     })();
@@ -1382,13 +1387,20 @@ export default function EventApp({ eventId }: { eventId?: string }) {
       setSaving(true);
       try {
         if (id) {
-          await updateEvent(id, eventName, data);
+          const res = await updateEvent(id, eventName, data, baseUpdatedAt);
+          if (!res.ok) {
+            // 競合時はタブ遷移せず、再読み込みを促すバナーを出す
+            if (res.conflict) setConflict(true);
+            return;
+          }
+          setBaseUpdatedAt(res.updatedAt);
         } else {
-          const newId = await createEvent(eventName, data);
-          if (newId) {
-            setId(newId);
+          const created = await createEvent(eventName, data);
+          if (created) {
+            setId(created.id);
+            setBaseUpdatedAt(created.updatedAt);
             // 同一コンポーネントを保ったままURLだけ更新（ルート遷移＝再マウントを避ける）
-            window.history.replaceState(null, "", `/e/${newId}#${nextTab}`);
+            window.history.replaceState(null, "", `/e/${created.id}#${nextTab}`);
           }
         }
       } finally {
@@ -1396,7 +1408,7 @@ export default function EventApp({ eventId }: { eventId?: string }) {
       }
       setActiveTab(nextTab);
     },
-    [id, eventName, data]
+    [id, eventName, data, baseUpdatedAt]
   );
 
   const saveAndCopyUrl = useCallback(
@@ -1410,13 +1422,20 @@ export default function EventApp({ eventId }: { eventId?: string }) {
       const buildShareText = async () => {
         let eventId = id;
         if (eventId) {
-          await updateEvent(eventId, eventName, data);
+          const res = await updateEvent(eventId, eventName, data, baseUpdatedAt);
+          if (!res.ok) {
+            // 競合時は共有を中止し、再読み込みを促す
+            if (res.conflict) setConflict(true);
+            throw new Error("イベントの保存に失敗しました");
+          }
+          setBaseUpdatedAt(res.updatedAt);
         } else {
-          const newId = await createEvent(eventName, data);
-          if (newId) {
-            eventId = newId;
-            setId(newId);
-            window.history.replaceState(null, "", `/e/${newId}`);
+          const created = await createEvent(eventName, data);
+          if (created) {
+            eventId = created.id;
+            setId(created.id);
+            setBaseUpdatedAt(created.updatedAt);
+            window.history.replaceState(null, "", `/e/${created.id}`);
           }
         }
         if (!eventId) throw new Error("イベントの保存に失敗しました");
@@ -1449,18 +1468,19 @@ export default function EventApp({ eventId }: { eventId?: string }) {
         setSaving(false);
       }
     },
-    [id, eventName, data]
+    [id, eventName, data, baseUpdatedAt]
   );
 
   // 初回: イベント名を登録して専用URLを発行 → 参加者登録へ
   const createAndStart = useCallback(async (name: string) => {
     setSaving(true);
     try {
-      const newId = await createEvent(name, { members: [], expenses: [] });
-      if (newId) {
+      const created = await createEvent(name, { members: [], expenses: [] });
+      if (created) {
         setEventName(name);
-        setId(newId);
-        window.history.replaceState(null, "", `/e/${newId}#settings`);
+        setId(created.id);
+        setBaseUpdatedAt(created.updatedAt);
+        window.history.replaceState(null, "", `/e/${created.id}#settings`);
         setActiveTab("settings");
       }
     } finally {
@@ -1471,8 +1491,14 @@ export default function EventApp({ eventId }: { eventId?: string }) {
   // ヘッダーのイベント名を編集して保存
   const commitEventName = useCallback(async () => {
     setEditingName(false);
-    if (id) await updateEvent(id, eventName, data);
-  }, [id, eventName, data]);
+    if (!id) return;
+    const res = await updateEvent(id, eventName, data, baseUpdatedAt);
+    if (!res.ok) {
+      if (res.conflict) setConflict(true);
+      return;
+    }
+    setBaseUpdatedAt(res.updatedAt);
+  }, [id, eventName, data, baseUpdatedAt]);
 
   if (loading) {
     return (
@@ -1489,6 +1515,22 @@ export default function EventApp({ eventId }: { eventId?: string }) {
 
   return (
     <div className="min-h-screen flex flex-col">
+      {/* 競合バナー: 他者が先に更新していて保存できなかったとき */}
+      {conflict && (
+        <div className="z-20 bg-red-50 border-b border-red-200 text-red-700 text-sm">
+          <div className="max-w-lg mx-auto px-4 py-2 flex items-center justify-between gap-3">
+            <span className="min-w-0">
+              他の人がこのイベントを更新しました。最新の内容を読み込んでから操作してください。
+            </span>
+            <button
+              className="shrink-0 underline font-medium"
+              onClick={() => window.location.reload()}
+            >
+              再読み込み
+            </button>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-[var(--border)]">
         <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
