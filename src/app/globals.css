@@ -148,6 +148,25 @@ body {
   background: #fef2f2;
 }
 
+/* 削除確認など、破壊的アクションを確定するボタン */
+.btn-danger {
+  background: var(--danger);
+  color: white;
+  padding: 0.5rem 1.25rem;
+  border-radius: 0.625rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: none;
+}
+.btn-danger:hover {
+  filter: brightness(0.95);
+}
+.btn-danger:active {
+  transform: translateY(1px);
+}
+
 /* Tags */
 .tag {
   display: flex;
