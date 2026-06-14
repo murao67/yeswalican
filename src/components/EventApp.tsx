@@ -328,6 +328,8 @@ function SettingsSection({
 }) {
   const [name, setName] = useState("");
   const [ratio, setRatio] = useState("1");
+  // 編集中の倍率は文字列のまま保持し、空欄を許容する
+  const [ratioDrafts, setRatioDrafts] = useState<Record<string, string>>({});
 
   const add = () => {
     const trimmed = name.trim();
@@ -344,11 +346,24 @@ function SettingsSection({
     setMembers(members.filter((m) => m.id !== id));
 
   const updateRatio = (id: string, val: string) => {
-    setMembers(
-      members.map((m) =>
-        m.id === id ? { ...m, ratio: parseFloat(val) || 1 } : m
-      )
-    );
+    // 入力中の文字列を保持（空欄や入力途中も許容）
+    setRatioDrafts((d) => ({ ...d, [id]: val }));
+    const parsed = parseFloat(val);
+    // 有効な数値が入力されたときのみメンバーへ反映する
+    if (val !== "" && !Number.isNaN(parsed)) {
+      setMembers(members.map((m) => (m.id === id ? { ...m, ratio: parsed } : m)));
+    }
+  };
+
+  const commitRatio = (id: string) => {
+    // 編集終了時にドラフトを破棄し、空欄・無効値は確定済みの値（最低1）へ戻す
+    setRatioDrafts((d) => {
+      if (!(id in d)) return d;
+      const rest = { ...d };
+      delete rest[id];
+      return rest;
+    });
+    setMembers(members.map((m) => (m.id === id ? { ...m, ratio: m.ratio || 1 } : m)));
   };
 
   const handleExport = () => downloadCSV(membersToCSV(members), "members.csv");
@@ -405,8 +420,9 @@ function SettingsSection({
                   type="number"
                   step="0.1"
                   min="0.1"
-                  value={m.ratio}
+                  value={ratioDrafts[m.id] ?? m.ratio}
                   onChange={(e) => updateRatio(m.id, e.target.value)}
+                  onBlur={() => commitRatio(m.id)}
                 />
                 <span className="text-xs text-[var(--muted)]">倍</span>
                 <button
