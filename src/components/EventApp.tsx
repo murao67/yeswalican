@@ -1674,10 +1674,15 @@ export default function EventApp({ eventId }: { eventId?: string }) {
           <ResultSection members={members} result={result} eventName={eventName} eventUrl={id ? `${typeof window !== "undefined" ? window.location.origin : ""}/e/${id}#result` : undefined} />
         )}
 
-        {/* ナビゲーションボタン */}
+        {/* ナビゲーションボタン
+            key に activeTab を含めてタブ切替ごとにボタンを作り直す。
+            これをしないと、遷移先の同じ位置に同種ボタンがある場合に DOM ノードが
+            使い回され、押した時の :hover 状態（btn-secondary:hover は accent 背景）が
+            固着して別スタイルに見えてしまう。 */}
         <div className="flex gap-3">
           {activeTab !== "settings" && (
             <button
+              key={`back-${activeTab}`}
               className="btn-secondary flex-1"
               onClick={() =>
                 setActiveTab(activeTab === "result" ? "expenses" : "settings")
@@ -1688,6 +1693,7 @@ export default function EventApp({ eventId }: { eventId?: string }) {
           )}
           {activeTab !== "result" && (
             <button
+              key={`save-${activeTab}`}
               className="btn-primary flex-1 inline-flex items-center justify-center"
               disabled={saving}
               onClick={() => save(activeTab)}
@@ -1697,6 +1703,7 @@ export default function EventApp({ eventId }: { eventId?: string }) {
           )}
           {activeTab !== "result" && (
             <button
+              key={`next-${activeTab}`}
               className="btn-secondary flex-1"
               onClick={() =>
                 setActiveTab(activeTab === "settings" ? "expenses" : "result")
