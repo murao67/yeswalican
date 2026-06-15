@@ -1,4 +1,4 @@
-import { Member, Expense, Settlement } from "./types";
+import { Member, Expense, Settlement, CustomAmount } from "./types";
 
 export interface ExpenseBreakdown {
   expense: Expense;
@@ -171,4 +171,35 @@ export function calculate(members: Member[], expenses: Expense[]): CalcResult {
   const settlements = optimizeSettlements(balance);
 
   return { breakdowns, totalBurden, totalPaid, balance, settlements };
+}
+
+// 個別指定額が立替額と整合するか検証する。問題なければ null、あれば理由メッセージを返す。
+// フォーム保存時と CSV インポート時で同じ基準のチェックに使う。
+//   - 合計が立替額を超える → 不整合
+//   - 空欄（倍率按分）の参加者がおらず、合計が立替額に一致しない → 不整合
+export function customAmountsError(
+  amount: number,
+  participantIds: string[],
+  customAmounts: CustomAmount[]
+): string | null {
+  const participantCustoms = customAmounts.filter((c) =>
+    participantIds.includes(c.memberId)
+  );
+  if (participantCustoms.length === 0 || amount <= 0) return null;
+
+  const customSum = participantCustoms.reduce((s, c) => s + c.amount, 0);
+  // 金額未指定（空欄＝残額を倍率按分）の参加者がいるか
+  const hasRatioMember = participantIds.some(
+    (id) => !customAmounts.some((c) => c.memberId === id)
+  );
+
+  if (customSum > amount) {
+    return `個別指定額の合計 ¥${customSum.toLocaleString()} が立替額 ¥${amount.toLocaleString()} を超えています`;
+  }
+  if (!hasRatioMember && customSum !== amount) {
+    return `個別指定額の合計 ¥${customSum.toLocaleString()} が立替額 ¥${amount.toLocaleString()} と一致しません（差額 ¥${(
+      amount - customSum
+    ).toLocaleString()}）。空欄の人がいないため、合計を立替額に合わせてください`;
+  }
+  return null;
 }
