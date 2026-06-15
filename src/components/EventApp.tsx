@@ -1,6 +1,13 @@
 "use client";
 
-import { Fragment, useState, useEffect, useCallback } from "react";
+import {
+  Fragment,
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useMemo,
+} from "react";
 import { Member, Expense, AppData, CustomAmount } from "@/lib/types";
 import { calculate, CalcResult, customAmountsError } from "@/lib/calc";
 import { createEvent, getEvent, updateEvent } from "@/lib/db";
@@ -1460,6 +1467,14 @@ const STEPS: {
   { id: "result", label: "精算結果", Icon: IconResult, step: 3 },
 ];
 
+// 自動保存の状態。ヘッダーに控えめに表示する。
+type SaveStatus = "idle" | "saving" | "saved" | "error";
+
+// 自動保存の要否判定: members/expenses の内容が同一なら保存不要
+function sameAppData(a: AppData, b: AppData): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
 // --- メインApp ---
 export default function EventApp({ eventId }: { eventId?: string }) {
   const [id, setId] = useState<string | undefined>(eventId);
@@ -1487,6 +1502,16 @@ export default function EventApp({ eventId }: { eventId?: string }) {
   });
   // マージでも解決できず保存できなかったときに true（再読み込みを促す）。
   const [conflict, setConflict] = useState(false);
+  // 自動保存の進捗（ヘッダー表示用）。
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  // 自動保存の同時実行を防ぐフラグと、クロージャの陳腐化を避けて
+  // 常に最新値を参照するための ref（保存はイベント名＋データをまとめて送る）。
+  const savingRef = useRef(false);
+  // 保存中に届いた追加変更を取りこぼさないためのフラグ。
+  const pendingRef = useRef(false);
+  const dataRef = useRef<AppData>({ members: [], expenses: [] });
+  const eventNameRef = useRef("");
+  const baseDataRef = useRef<AppData>({ members: [], expenses: [] });
 
   // 既存イベント読み込み
   useEffect(() => {
@@ -1510,7 +1535,17 @@ export default function EventApp({ eventId }: { eventId?: string }) {
     window.history.replaceState(null, "", `/e/${id}#${activeTab}`);
   }, [activeTab, id, loading]);
 
-  const data: AppData = { members, expenses };
+  const data: AppData = useMemo(
+    () => ({ members, expenses }),
+    [members, expenses]
+  );
+  // 自動保存が常に最新値を読めるよう、レンダー後に ref を同期する
+  // （レンダー中の ref 書き込みは禁止されているため effect で行う）。
+  useEffect(() => {
+    dataRef.current = data;
+    eventNameRef.current = eventName;
+    baseDataRef.current = baseData;
+  }, [data, eventName, baseData]);
   const result =
     members.length > 0 && expenses.length > 0
       ? calculate(members, expenses)
@@ -1524,7 +1559,7 @@ export default function EventApp({ eventId }: { eventId?: string }) {
       targetId: string,
       name: string,
       current: AppData
-    ): Promise<boolean> => {
+    ): Promise<{ ok: boolean; conflict: boolean }> => {
       let toSave = current;
       let ancestor = baseData;
       let expected = baseUpdatedAt;
@@ -1533,12 +1568,13 @@ export default function EventApp({ eventId }: { eventId?: string }) {
         if (res.ok) {
           setBaseUpdatedAt(res.updatedAt);
           setBaseData(toSave);
-          return true;
+          return { ok: true, conflict: false };
         }
-        if (!res.conflict) return false;
+        // 通信・DBエラー（競合ではない）。再試行に任せる。
+        if (!res.conflict) return { ok: false, conflict: false };
         // 競合: サーバーの最新を取得し、共通祖先・自分・最新の3-wayマージ
         const latest = await getEvent(targetId);
-        if (!latest) return false;
+        if (!latest) return { ok: false, conflict: false };
         toSave = mergeAppData(ancestor, toSave, latest.data);
         ancestor = latest.data;
         expected = latest.updated_at;
@@ -1546,39 +1582,69 @@ export default function EventApp({ eventId }: { eventId?: string }) {
         setMembers(toSave.members);
         setExpenses(toSave.expenses);
       }
-      return false;
+      // 数回マージしても競合が解消しなかった。再読み込みを促す。
+      return { ok: false, conflict: true };
     },
     [baseData, baseUpdatedAt]
   );
 
-  const save = useCallback(
-    async (nextTab: TabId) => {
-      setSaving(true);
-      try {
-        if (id) {
-          const ok = await commitData(id, eventName, data);
-          if (!ok) {
-            // マージでも解決できなかった場合はタブ遷移せず再読み込みを促す
-            setConflict(true);
-            return;
-          }
-        } else {
-          const created = await createEvent(eventName, data);
-          if (created) {
-            setId(created.id);
-            setBaseUpdatedAt(created.updatedAt);
-            setBaseData(data);
-            // 同一コンポーネントを保ったままURLだけ更新（ルート遷移＝再マウントを避ける）
-            window.history.replaceState(null, "", `/e/${created.id}#${nextTab}`);
-          }
+  // 自動保存の実体。イベント名＋データ（参加者・立替）をまとめて保存する。
+  // 同時実行は savingRef で防ぎ、最新値は ref から読む。
+  // 競合が解消できなかったときだけ再読み込みバナーを出す。通信エラーは
+  // ステータスを error にして、次の変更や手動再試行で復帰させる。
+  const flushSave = useCallback(async () => {
+    if (!id) return;
+    // 既に保存中なら、その保存が終わった後に再度保存させる（取りこぼし防止）。
+    if (savingRef.current) {
+      pendingRef.current = true;
+      return;
+    }
+    savingRef.current = true;
+    setSaveStatus("saving");
+    try {
+      do {
+        pendingRef.current = false;
+        const res = await commitData(id, eventNameRef.current, dataRef.current);
+        if (!res.ok) {
+          setSaveStatus("error");
+          if (res.conflict) setConflict(true);
+          break; // 失敗時はここで止め、次の変更／手動再試行に任せる
         }
-      } finally {
-        setSaving(false);
-      }
-      setActiveTab(nextTab);
-    },
-    [id, eventName, data, commitData]
-  );
+        setSaveStatus("saved");
+      } while (pendingRef.current); // 保存中に更に変更があれば続けて保存
+    } finally {
+      savingRef.current = false;
+    }
+  }, [id, commitData]);
+
+  // 参加者・立替の追加/編集/削除を検知して自動保存する。
+  // 入力中の連続変更（比率の打鍵など）をまとめるため少し待ってから保存。
+  useEffect(() => {
+    if (loading || !id) return;
+    if (sameAppData(data, baseData)) return; // 変更なしなら何もしない
+    const t = setTimeout(() => {
+      void flushSave();
+    }, 800);
+    return () => clearTimeout(t);
+  }, [data, baseData, id, loading, flushSave]);
+
+  // debounce 待機中にタブを閉じる/離れると直前の変更が飛ぶため、
+  // 離脱直前に未保存分を保存しておく。
+  useEffect(() => {
+    if (!id) return;
+    const flushIfDirty = () => {
+      if (!sameAppData(dataRef.current, baseDataRef.current)) void flushSave();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") flushIfDirty();
+    };
+    window.addEventListener("pagehide", flushIfDirty);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("pagehide", flushIfDirty);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [id, flushSave]);
 
   const saveAndCopyUrl = useCallback(
     async (hash?: TabId, message?: string) => {
@@ -1591,10 +1657,10 @@ export default function EventApp({ eventId }: { eventId?: string }) {
       const buildShareText = async () => {
         let eventId = id;
         if (eventId) {
-          const ok = await commitData(eventId, eventName, data);
-          if (!ok) {
-            // マージでも解決できなければ共有を中止し、再読み込みを促す
-            setConflict(true);
+          const res = await commitData(eventId, eventName, data);
+          if (!res.ok) {
+            // 解決できなければ共有を中止。競合なら再読み込みを促す。
+            if (res.conflict) setConflict(true);
             throw new Error("イベントの保存に失敗しました");
           }
         } else {
@@ -1658,13 +1724,11 @@ export default function EventApp({ eventId }: { eventId?: string }) {
     }
   }, []);
 
-  // ヘッダーのイベント名を編集して保存
-  const commitEventName = useCallback(async () => {
+  // ヘッダーのイベント名を編集して保存（参加者・立替と同じ自動保存に委ねる）
+  const commitEventName = useCallback(() => {
     setEditingName(false);
-    if (!id) return;
-    const ok = await commitData(id, eventName, data);
-    if (!ok) setConflict(true);
-  }, [id, eventName, data, commitData]);
+    void flushSave();
+  }, [flushSave]);
 
   if (loading) {
     return (
@@ -1738,6 +1802,42 @@ export default function EventApp({ eventId }: { eventId?: string }) {
                 </span>
               </button>
             )}
+          </div>
+          {/* 自動保存ステータス（控えめに表示） */}
+          <div className="shrink-0 text-xs" aria-live="polite">
+            {saveStatus === "saving" && (
+              <span className="text-[var(--muted)]">保存中…</span>
+            )}
+            {saveStatus === "saved" && (
+              <span className="inline-flex items-center gap-1 text-[var(--muted)]">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                保存しました
+              </span>
+            )}
+            {saveStatus === "error" &&
+              (conflict ? (
+                <span className="text-red-600">保存できません</span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void flushSave()}
+                  className="text-red-600 underline"
+                >
+                  保存に失敗 · 再試行
+                </button>
+              ))}
           </div>
         </div>
 
@@ -1820,18 +1920,8 @@ export default function EventApp({ eventId }: { eventId?: string }) {
           )}
           {activeTab !== "result" && (
             <button
-              key={`save-${activeTab}`}
-              className="btn-primary flex-1 inline-flex items-center justify-center"
-              disabled={saving}
-              onClick={() => save(activeTab)}
-            >
-              {saving ? "保存中..." : "保存"}
-            </button>
-          )}
-          {activeTab !== "result" && (
-            <button
               key={`next-${activeTab}`}
-              className="btn-secondary flex-1"
+              className="btn-primary flex-1"
               onClick={() =>
                 setActiveTab(activeTab === "settings" ? "expenses" : "result")
               }
