@@ -63,10 +63,10 @@ function CopyIconButton({
         title={label}
         disabled={disabled}
         onClick={onClick}
-        className={`h-7 px-2.5 rounded-lg border inline-flex items-center justify-center shrink-0 text-xs font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+        className={`h-7 px-2.5 rounded-lg border inline-flex items-center justify-center shrink-0 text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
           copied
             ? "bg-[var(--success)] text-white border-[var(--success)]"
-            : "bg-[var(--accent-bg)] text-[var(--accent)] border-[var(--accent-light)] enabled:hover:border-[var(--accent)]"
+            : "text-[var(--muted)] border-[var(--border)] enabled:hover:border-[var(--accent)] enabled:hover:text-[var(--accent)]"
         }`}
       >
         ページを共有
