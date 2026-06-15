@@ -41,6 +41,24 @@ function CopyToast({ label }: { label: string }) {
   );
 }
 
+// コピーアイコン（正方形が2つ重なった形）
+const IconCopy = () => (
+  <svg
+    width="12"
+    height="12"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+    <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+  </svg>
+);
+
 // 共有ボタン（text でボタン内ラベルを指定、コピー後はトーストで結果を表示）
 function CopyIconButton({
   label,
@@ -65,12 +83,13 @@ function CopyIconButton({
         title={label}
         disabled={disabled}
         onClick={onClick}
-        className={`h-7 px-2.5 rounded-lg border inline-flex items-center justify-center shrink-0 text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+        className={`h-7 px-2.5 rounded-lg border inline-flex items-center justify-center gap-1 shrink-0 text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
           copied
             ? "bg-[var(--success)] text-white border-[var(--success)]"
             : "text-[var(--muted)] border-[var(--border)] enabled:hover:border-[var(--accent)] enabled:hover:text-[var(--accent)]"
         }`}
       >
+        <IconCopy />
         {text}
       </button>
       {copied && <CopyToast label={copiedLabel} />}
@@ -821,6 +840,7 @@ function ExpenseSection({
           <p className="text-sm text-[var(--muted)]">立替えた支払いを登録</p>
           <CopyIconButton
             label="登録依頼用の文章をコピー"
+            text="登録を依頼"
             copiedLabel="依頼文をコピーしました！"
             copied={copied}
             disabled={saving || members.length < 2}
