@@ -41,15 +41,17 @@ function CopyToast({ label }: { label: string }) {
   );
 }
 
-// 共有ボタン（「ページを共有」ラベル、コピー後はトーストで結果を表示）
+// 共有ボタン（text でボタン内ラベルを指定、コピー後はトーストで結果を表示）
 function CopyIconButton({
   label,
+  text = "ページを共有",
   copiedLabel,
   copied,
   disabled,
   onClick,
 }: {
   label: string;
+  text?: string;
   copiedLabel: string;
   copied: boolean;
   disabled?: boolean;
@@ -69,7 +71,7 @@ function CopyIconButton({
             : "text-[var(--muted)] border-[var(--border)] enabled:hover:border-[var(--accent)] enabled:hover:text-[var(--accent)]"
         }`}
       >
-        ページを共有
+        {text}
       </button>
       {copied && <CopyToast label={copiedLabel} />}
     </>
@@ -535,18 +537,37 @@ function ExpenseForm({
   const memberName = (id: string) =>
     members.find((m) => m.id === id)?.name ?? "?";
 
+  // 個別指定額の整合性チェック（合わない場合は保存をブロック）
+  const amt = parseInt(amount) || 0;
+  const participantCustoms = customAmounts.filter((c) =>
+    participantIds.includes(c.memberId)
+  );
+  const customSum = participantCustoms.reduce((s, c) => s + c.amount, 0);
+  // 金額未指定（空欄＝残額を倍率按分）の参加者がいるか
+  const hasRatioMember = participantIds.some(
+    (id) => !customAmounts.some((c) => c.memberId === id)
+  );
+  const customError =
+    useCustom && participantCustoms.length > 0 && amt > 0
+      ? customSum > amt
+        ? `個別指定額の合計 ¥${customSum.toLocaleString()} が立替額 ¥${amt.toLocaleString()} を超えています`
+        : !hasRatioMember && customSum !== amt
+        ? `個別指定額の合計 ¥${customSum.toLocaleString()} が立替額 ¥${amt.toLocaleString()} と一致しません（差額 ¥${(
+            amt - customSum
+          ).toLocaleString()}）。空欄の人がいないため、合計を立替額に合わせてください`
+        : null
+      : null;
+
   const submit = () => {
-    const amt = parseInt(amount);
     if (!title.trim() || !amt || !payerId || participantIds.length === 0)
       return;
+    if (customError) return; // 個別指定額が立替額と整合しない場合は保存しない
     onSubmit({
       title: title.trim(),
       amount: amt,
       payerId,
       participantIds: [...participantIds],
-      customAmounts: customAmounts.filter((c) =>
-        participantIds.includes(c.memberId)
-      ),
+      customAmounts: useCustom ? participantCustoms : [],
     });
   };
 
@@ -720,13 +741,22 @@ function ExpenseForm({
         </div>
       )}
 
+      {customError && (
+        <p className="text-xs text-[var(--danger)] font-medium">
+          {customError}
+        </p>
+      )}
       <div className="flex gap-2">
         {onCancel && (
           <button className="btn-secondary flex-1" onClick={onCancel}>
             キャンセル
           </button>
         )}
-        <button className={`${submitClassName} flex-1`} onClick={submit}>
+        <button
+          className={`${submitClassName} flex-1 disabled:opacity-40 disabled:cursor-not-allowed`}
+          onClick={submit}
+          disabled={!!customError}
+        >
           {submitLabel}
         </button>
       </div>
@@ -1185,6 +1215,7 @@ function CopySettlementsButton({
   return (
     <CopyIconButton
       label="精算方法をテキストでコピー"
+      text="結果を共有"
       copiedLabel="精算方法をコピーしました！"
       copied={copied}
       onClick={copy}
