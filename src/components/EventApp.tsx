@@ -413,9 +413,7 @@ function ExpenseForm({
 }) {
   const [title, setTitle] = useState(initial?.title ?? "");
   const [amount, setAmount] = useState(initial ? String(initial.amount) : "");
-  const [payerId, setPayerId] = useState(
-    initial?.payerId ?? members[0]?.id ?? ""
-  );
+  const [payerId, setPayerId] = useState(initial?.payerId ?? "");
   const [participantIds, setParticipantIds] = useState<string[]>(
     initial ? [...initial.participantIds] : members.map((m) => m.id)
   );
@@ -469,12 +467,17 @@ function ExpenseForm({
       <div>
         <label className="section-label mb-1.5 block">支払った人</label>
         <select
-          className="input w-full cursor-pointer"
+          className={`input w-full cursor-pointer ${
+            payerId === "" ? "text-[var(--muted)]" : ""
+          }`}
           value={payerId}
           onChange={(e) => setPayerId(e.target.value)}
         >
+          <option value="" disabled>
+            選択してください
+          </option>
           {members.map((m) => (
-            <option key={m.id} value={m.id}>
+            <option key={m.id} value={m.id} className="text-[var(--foreground)]">
               {m.name}
             </option>
           ))}
