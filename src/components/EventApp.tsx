@@ -2,7 +2,7 @@
 
 import { Fragment, useState, useEffect, useCallback } from "react";
 import { Member, Expense, AppData, CustomAmount } from "@/lib/types";
-import { calculate, CalcResult } from "@/lib/calc";
+import { calculate, CalcResult, customAmountsError } from "@/lib/calc";
 import { createEvent, getEvent, updateEvent } from "@/lib/db";
 import { mergeAppData } from "@/lib/merge";
 import {
@@ -556,26 +556,14 @@ function ExpenseForm({
   const memberName = (id: string) =>
     members.find((m) => m.id === id)?.name ?? "?";
 
-  // 個別指定額の整合性チェック（合わない場合は保存をブロック）
+  // 個別指定額の整合性チェック（合わない場合は保存をブロック。CSV取り込みと同じ基準）
   const amt = parseInt(amount) || 0;
   const participantCustoms = customAmounts.filter((c) =>
     participantIds.includes(c.memberId)
   );
-  const customSum = participantCustoms.reduce((s, c) => s + c.amount, 0);
-  // 金額未指定（空欄＝残額を倍率按分）の参加者がいるか
-  const hasRatioMember = participantIds.some(
-    (id) => !customAmounts.some((c) => c.memberId === id)
-  );
-  const customError =
-    useCustom && participantCustoms.length > 0 && amt > 0
-      ? customSum > amt
-        ? `個別指定額の合計 ¥${customSum.toLocaleString()} が立替額 ¥${amt.toLocaleString()} を超えています`
-        : !hasRatioMember && customSum !== amt
-        ? `個別指定額の合計 ¥${customSum.toLocaleString()} が立替額 ¥${amt.toLocaleString()} と一致しません（差額 ¥${(
-            amt - customSum
-          ).toLocaleString()}）。空欄の人がいないため、合計を立替額に合わせてください`
-        : null
-      : null;
+  const customError = useCustom
+    ? customAmountsError(amt, participantIds, customAmounts)
+    : null;
 
   const submit = () => {
     if (!title.trim() || !amt || !payerId || participantIds.length === 0)
@@ -803,6 +791,8 @@ function ExpenseSection({
   const [formKey, setFormKey] = useState(0);
   // 削除確認の対象となる立替（null のときはモーダル非表示）
   const [pendingDelete, setPendingDelete] = useState<Expense | null>(null);
+  // CSV取り込み時のエラー（個別指定額が立替額と不整合な行があった等）
+  const [importError, setImportError] = useState<string | null>(null);
 
   const addExpense = (data: Omit<Expense, "id">) => {
     setExpenses([...expenses, { id: genId(), ...data }]);
@@ -830,6 +820,20 @@ function ExpenseSection({
   const handleImport = async (file: File) => {
     const csv = await readCSVFile(file);
     const imported = csvToExpenses(csv, members, genId);
+    // 個別指定額が立替額と整合しない行はフォームと同じ基準で弾く
+    const invalid = imported.filter(
+      (e) =>
+        customAmountsError(e.amount, e.participantIds, e.customAmounts) !== null
+    );
+    if (invalid.length > 0) {
+      setImportError(
+        `個別指定額が立替額と一致しない立替が${invalid.length}件あります（${invalid
+          .map((e) => e.title)
+          .join("、")}）。CSVを修正してから取り込んでください。`
+      );
+      return;
+    }
+    setImportError(null);
     if (imported.length > 0) setExpenses([...expenses, ...imported]);
   };
 
@@ -853,6 +857,12 @@ function ExpenseSection({
           hint="※ 支払者・負担者の列には、参加者登録で登録済みの参加者名を入力してください。"
         />
       </div>
+
+      {importError && (
+        <p className="text-xs text-[var(--danger)] font-medium">
+          {importError}
+        </p>
+      )}
 
       <div className="card space-y-4">
         {members.length < 2 ? (
