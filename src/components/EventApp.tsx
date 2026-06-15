@@ -1803,13 +1803,13 @@ export default function EventApp({ eventId }: { eventId?: string }) {
               </button>
             )}
           </div>
-          {/* 自動保存ステータス（控えめに表示） */}
+          {/* 自動保存ステータス */}
           <div className="shrink-0 text-xs" aria-live="polite">
             {saveStatus === "saving" && (
               <span className="text-[var(--muted)]">保存中…</span>
             )}
             {saveStatus === "saved" && (
-              <span className="inline-flex items-center gap-1 text-[var(--muted)]">
+              <span className="inline-flex items-center gap-1 font-semibold text-[var(--success)]">
                 <svg
                   width="14"
                   height="14"
