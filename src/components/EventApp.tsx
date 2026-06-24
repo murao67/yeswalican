@@ -249,119 +249,6 @@ function ConfirmModal({
 
 type TabId = "settings" | "expenses" | "result";
 
-// --- 一括登録メニュー（CSV出力／読込） ---
-function BulkRegisterMenu({
-  onExport,
-  onImport,
-  hint,
-}: {
-  onExport: () => void;
-  onImport: (file: File) => void;
-  hint?: string;
-}) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        className="btn-secondary text-xs !px-2.5 !py-1 inline-flex items-center gap-1"
-        onClick={() => setOpen((v) => !v)}
-      >
-        一括登録
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="3"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-          className={`transition-transform ${open ? "rotate-180" : ""}`}
-        >
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-      </button>
-
-      {open && (
-        <>
-          {/* 背景クリックで閉じる */}
-          <div
-            className="fixed inset-0 z-30"
-            onClick={() => setOpen(false)}
-          />
-          <div className="absolute right-0 top-full mt-1.5 z-40 w-64 bg-white border border-[var(--border)] rounded-xl shadow-lg p-3 animate-in text-left">
-            <p className="text-xs font-bold mb-1">CSVで一括登録</p>
-            <p className="text-[11px] text-[var(--muted)] leading-relaxed mb-2.5">
-              はじめは<span className="text-[var(--foreground)] font-medium">出力</span>して空のテンプレートを入手し、Excelなどで編集してから<span className="text-[var(--foreground)] font-medium">読込</span>すると一括登録できます。すでに内容があれば、その内容を書き出せます。
-            </p>
-            {hint && (
-              <p className="text-[11px] text-[var(--warning)] leading-relaxed mb-2.5">
-                {hint}
-              </p>
-            )}
-            <button
-              className="btn-secondary w-full text-xs !py-1.5 mb-1.5 flex items-center justify-center gap-1.5"
-              onClick={() => {
-                onExport();
-                setOpen(false);
-              }}
-            >
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
-              CSVを出力
-            </button>
-            <label className="btn-secondary w-full text-xs !py-1.5 flex items-center justify-center gap-1.5 cursor-pointer">
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="17 8 12 3 7 8" />
-                <line x1="12" y1="3" x2="12" y2="15" />
-              </svg>
-              CSVを読み込む
-              <input
-                type="file"
-                accept=".csv,.txt"
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) onImport(f);
-                  e.target.value = "";
-                  setOpen(false);
-                }}
-              />
-            </label>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
 // --- 参加者登録 ---
 function SettingsSection({
   members,
@@ -412,19 +299,9 @@ function SettingsSection({
     setMembers(members.map((m) => (m.id === id ? { ...m, ratio: m.ratio || 1 } : m)));
   };
 
-  const handleExport = () => downloadCSV(membersToCSV(members), "members.csv");
-  const handleImport = async (file: File) => {
-    const csv = await readCSVFile(file);
-    const imported = csvToMembers(csv, genId);
-    if (imported.length > 0) setMembers([...members, ...imported]);
-  };
-
   return (
     <section className="space-y-4 animate-in">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-[var(--muted)]">参加者を登録</p>
-        <BulkRegisterMenu onExport={handleExport} onImport={handleImport} />
-      </div>
+      <p className="text-sm text-[var(--muted)]">参加者を登録</p>
       <div className="card space-y-4">
         <label className="section-label block">参加者名と負担倍率</label>
         <div className="flex gap-2 flex-wrap">
@@ -781,6 +658,7 @@ function ExpenseSection({
   onCopyRequest,
   copied,
   saving,
+  importError,
 }: {
   members: Member[];
   expenses: Expense[];
@@ -788,13 +666,12 @@ function ExpenseSection({
   onCopyRequest: () => void;
   copied: boolean;
   saving: boolean;
+  importError: string | null;
 }) {
   const [editing, setEditing] = useState<Expense | null>(null);
   const [formKey, setFormKey] = useState(0);
   // 削除確認の対象となる立替（null のときはモーダル非表示）
   const [pendingDelete, setPendingDelete] = useState<Expense | null>(null);
-  // CSV取り込み時のエラー（個別指定額が立替額と不整合な行があった等）
-  const [importError, setImportError] = useState<string | null>(null);
 
   const addExpense = (data: Omit<Expense, "id">) => {
     setExpenses([...expenses, { id: genId(), ...data }]);
@@ -817,45 +694,16 @@ function ExpenseSection({
   const memberName = (id: string) =>
     members.find((m) => m.id === id)?.name ?? "?";
 
-  const handleExport = () =>
-    downloadCSV(expensesToCSV(expenses, members), "expenses.csv");
-  const handleImport = async (file: File) => {
-    const csv = await readCSVFile(file);
-    const imported = csvToExpenses(csv, members, genId);
-    // 個別指定額が立替額と整合しない行はフォームと同じ基準で弾く
-    const invalid = imported.filter(
-      (e) =>
-        customAmountsError(e.amount, e.participantIds, e.customAmounts) !== null
-    );
-    if (invalid.length > 0) {
-      setImportError(
-        `個別指定額が立替額と一致しない立替が${invalid.length}件あります（${invalid
-          .map((e) => e.title)
-          .join("、")}）。CSVを修正してから取り込んでください。`
-      );
-      return;
-    }
-    setImportError(null);
-    if (imported.length > 0) setExpenses([...expenses, ...imported]);
-  };
-
   return (
     <section className="space-y-4 animate-in">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <p className="text-sm text-[var(--muted)]">立替えた支払いを登録</p>
-          <CopyIconButton
-            label="登録依頼用の文章をコピー"
-            text="登録を依頼"
-            copied={copied}
-            disabled={saving || members.length < 2}
-            onClick={onCopyRequest}
-          />
-        </div>
-        <BulkRegisterMenu
-          onExport={handleExport}
-          onImport={handleImport}
-          hint="※ 支払者・負担者の列には、参加者登録で登録済みの参加者名を入力してください。"
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm text-[var(--muted)]">立替えた支払いを登録</p>
+        <CopyIconButton
+          label="登録依頼用の文章をコピー"
+          text="登録を依頼"
+          copied={copied}
+          disabled={saving || members.length < 2}
+          onClick={onCopyRequest}
         />
       </div>
 
@@ -1143,12 +991,10 @@ function BreakdownTable({
   members,
   result,
   name,
-  exportResultCSV,
 }: {
   members: Member[];
   result: CalcResult;
   name: (id: string) => string;
-  exportResultCSV: () => void;
 }) {
   const [showModal, setShowModal] = useState(false);
 
@@ -1162,12 +1008,6 @@ function BreakdownTable({
             onClick={() => setShowModal(true)}
           >
             大きく表示
-          </button>
-          <button
-            className="btn-secondary text-xs !px-2.5 !py-1"
-            onClick={exportResultCSV}
-          >
-            CSV出力
           </button>
         </div>
       </div>
@@ -1287,60 +1127,6 @@ function ResultSection({
 }) {
   const name = (id: string) => members.find((m) => m.id === id)?.name ?? "?";
 
-  const truncate = (s: string, max: number) =>
-    s.length > max ? s.slice(0, max) + "..." : s;
-
-  const exportResultCSV = () => {
-    if (!result) return;
-    const header = ["支出", "支払者", "合計", ...members.map((m) => m.name)];
-    const rows = result.breakdowns.map((b) => [
-      b.expense.title,
-      name(b.expense.payerId),
-      String(b.expense.amount),
-      ...members.map((m) => String(b.amounts[m.id] ?? "")),
-    ]);
-    rows.push([
-      "合計", "", "",
-      ...members.map((m) => String(result.totalBurden[m.id] ?? 0)),
-    ]);
-    rows.push([
-      "支払済", "", "",
-      ...members.map((m) => String(result.totalPaid[m.id] ?? 0)),
-    ]);
-    rows.push([
-      "差額", "", "",
-      ...members.map((m) => String(result.balance[m.id] ?? 0)),
-    ]);
-    for (const s of result.settlements) {
-      rows.push([
-        `精算: ${name(s.fromId)}→${name(s.toId)}`, "", "",
-        ...members.map((m) =>
-          m.id === s.fromId
-            ? String(s.amount)
-            : m.id === s.toId
-            ? String(-s.amount)
-            : ""
-        ),
-      ]);
-    }
-    if (result.settlements.length > 0) {
-      rows.push([
-        "精算後", "", "",
-        ...members.map((m) => {
-          const bal = result.balance[m.id] ?? 0;
-          const adj = result.settlements.reduce((sum, s) => {
-            if (s.fromId === m.id) return sum + s.amount;
-            if (s.toId === m.id) return sum - s.amount;
-            return sum;
-          }, 0);
-          return String(Math.round(bal + adj));
-        }),
-      ]);
-    }
-    const csv = [header, ...rows].map((r) => r.join(",")).join("\n");
-    downloadCSV(csv, "settlement.csv");
-  };
-
   if (!result) {
     return (
       <section className="space-y-4 animate-in">
@@ -1356,7 +1142,7 @@ function ResultSection({
 
   return (
     <section className="space-y-5 animate-in">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-2">
         <p className="text-sm text-[var(--muted)]">精算結果を確認</p>
         {result.settlements.length > 0 && (
           <CopySettlementsButton
@@ -1409,7 +1195,6 @@ function ResultSection({
           members={members}
           result={result}
           name={name}
-          exportResultCSV={exportResultCSV}
         />
       </div>
     </section>
@@ -1513,6 +1298,44 @@ const IconPlus = () => (
   </svg>
 );
 
+// CSV出力（ダウンロード）アイコン
+const IconDownload = () => (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="7 10 12 15 17 10" />
+    <line x1="12" y1="15" x2="12" y2="3" />
+  </svg>
+);
+
+// CSV読み込み（アップロード）アイコン
+const IconUpload = () => (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="17 8 12 3 7 8" />
+    <line x1="12" y1="3" x2="12" y2="15" />
+  </svg>
+);
+
 // 右上メニューの各項目（無効時は理由を title で添える）
 function MenuItem({
   icon,
@@ -1542,21 +1365,27 @@ function MenuItem({
   );
 }
 
-// --- 右上のメニュー（共有文コピー・イベント名編集・新規作成） ---
+// --- 右上のメニュー（共有文コピー・イベント名編集・CSV入出力・新規作成） ---
 function HeaderMenu({
-  onCopyRequest,
-  copyRequestDisabled,
-  onCopyResult,
-  copyResultDisabled,
+  activeTab,
   onEditName,
   onNewEvent,
+  onExportMembers,
+  onImportMembers,
+  onExportExpenses,
+  onImportExpenses,
+  onExportResult,
+  exportResultDisabled,
 }: {
-  onCopyRequest: () => void;
-  copyRequestDisabled: boolean;
-  onCopyResult: () => void;
-  copyResultDisabled: boolean;
+  activeTab: TabId;
   onEditName: () => void;
   onNewEvent: () => void;
+  onExportMembers: () => void;
+  onImportMembers: (file: File) => void;
+  onExportExpenses: () => void;
+  onImportExpenses: (file: File) => void;
+  onExportResult: () => void;
+  exportResultDisabled: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
@@ -1565,9 +1394,34 @@ function HeaderMenu({
     close();
     fn();
   };
+  // CSV読み込み用の隠しファイル入力。メニューを閉じても残るよう外側に置く。
+  const membersInputRef = useRef<HTMLInputElement>(null);
+  const expensesInputRef = useRef<HTMLInputElement>(null);
 
   return (
     <div className="relative">
+      <input
+        ref={membersInputRef}
+        type="file"
+        accept=".csv,.txt"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) onImportMembers(f);
+          e.target.value = "";
+        }}
+      />
+      <input
+        ref={expensesInputRef}
+        type="file"
+        accept=".csv,.txt"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) onImportExpenses(f);
+          e.target.value = "";
+        }}
+      />
       <button
         type="button"
         aria-label="メニュー"
@@ -1588,24 +1442,55 @@ function HeaderMenu({
             role="menu"
           >
             <MenuItem
-              icon={<IconCopy />}
-              label="立替登録の依頼文をコピー"
-              disabled={copyRequestDisabled}
-              disabledHint="参加者を2人以上登録すると使えます"
-              onClick={run(onCopyRequest)}
-            />
-            <MenuItem
-              icon={<IconCopy />}
-              label="精算結果の共有文をコピー"
-              disabled={copyResultDisabled}
-              disabledHint="精算が必要な結果がまだありません"
-              onClick={run(onCopyResult)}
-            />
-            <MenuItem
               icon={<IconPencil />}
               label="イベント名を編集"
               onClick={run(onEditName)}
             />
+            <div className="my-1 border-t border-[var(--border)]" />
+            {/* CSV入出力は現在のタブに応じて切り替える */}
+            {activeTab === "settings" && (
+              <>
+                <MenuItem
+                  icon={<IconDownload />}
+                  label="参加者をCSVで出力"
+                  onClick={run(onExportMembers)}
+                />
+                <MenuItem
+                  icon={<IconUpload />}
+                  label="参加者をCSVで読み込み"
+                  onClick={() => {
+                    close();
+                    membersInputRef.current?.click();
+                  }}
+                />
+              </>
+            )}
+            {activeTab === "expenses" && (
+              <>
+                <MenuItem
+                  icon={<IconDownload />}
+                  label="立替をCSVで出力"
+                  onClick={run(onExportExpenses)}
+                />
+                <MenuItem
+                  icon={<IconUpload />}
+                  label="立替をCSVで読み込み"
+                  onClick={() => {
+                    close();
+                    expensesInputRef.current?.click();
+                  }}
+                />
+              </>
+            )}
+            {activeTab === "result" && (
+              <MenuItem
+                icon={<IconDownload />}
+                label="精算結果をCSVで出力"
+                disabled={exportResultDisabled}
+                disabledHint="精算結果がまだありません"
+                onClick={run(onExportResult)}
+              />
+            )}
             <div className="my-1 border-t border-[var(--border)]" />
             <MenuItem
               icon={<IconPlus />}
@@ -1647,6 +1532,8 @@ export default function EventApp({ eventId }: { eventId?: string }) {
   // コピー完了トースト（セクションのボタン・右上メニュー共通でここに表示）
   const [toast, setToast] = useState<string | null>(null);
   const [editingName, setEditingName] = useState(false);
+  // CSV取り込み時のエラー（立替の個別指定額が不整合な行があった等）。立替タブで表示する。
+  const [importError, setImportError] = useState<string | null>(null);
   // 楽観ロック用。読み込み or 最後に保存した時点の updated_at を保持する。
   const [baseUpdatedAt, setBaseUpdatedAt] = useState<string | null>(null);
   // 3-wayマージの共通祖先。読み込み or 最後に保存した時点のデータを保持する。
@@ -1711,24 +1598,92 @@ export default function EventApp({ eventId }: { eventId?: string }) {
     window.setTimeout(() => setToast(null), 2000);
   }, []);
 
-  // 精算結果の共有文をクリップボードへコピーする（右上メニューから利用）
-  const copySettlementsToClipboard = () => {
-    if (!result || result.settlements.length === 0) return;
+  // --- CSV入出力（右上メニューから利用） ---
+  const exportMembers = () =>
+    downloadCSV(membersToCSV(members), "members.csv");
+  const importMembers = async (file: File) => {
+    const csv = await readCSVFile(file);
+    const imported = csvToMembers(csv, genId);
+    if (imported.length > 0) {
+      setMembers([...members, ...imported]);
+      showToast(`${imported.length}人を読み込みました`);
+    }
+  };
+  const exportExpenses = () =>
+    downloadCSV(expensesToCSV(expenses, members), "expenses.csv");
+  const importExpenses = async (file: File) => {
+    const csv = await readCSVFile(file);
+    const imported = csvToExpenses(csv, members, genId);
+    // 個別指定額が立替額と整合しない行はフォームと同じ基準で弾く
+    const invalid = imported.filter(
+      (e) =>
+        customAmountsError(e.amount, e.participantIds, e.customAmounts) !== null
+    );
+    if (invalid.length > 0) {
+      setImportError(
+        `個別指定額が立替額と一致しない立替が${invalid.length}件あります（${invalid
+          .map((e) => e.title)
+          .join("、")}）。CSVを修正してから取り込んでください。`
+      );
+      return;
+    }
+    setImportError(null);
+    if (imported.length > 0) {
+      setExpenses([...expenses, ...imported]);
+      showToast(`${imported.length}件の立替を読み込みました`);
+    }
+  };
+  const exportResultCSV = () => {
+    if (!result) return;
     const name = (mid: string) =>
       members.find((m) => m.id === mid)?.name ?? "?";
-    const eventUrl =
-      typeof window !== "undefined" && id
-        ? `${window.location.origin}/e/${id}#result`
-        : undefined;
-    const text = buildSettlementsText({
-      settlements: result.settlements,
-      name,
-      eventUrl,
-      eventName,
-    });
-    void navigator.clipboard
-      .writeText(text)
-      .then(() => showToast("精算方法をコピーしました！"));
+    const header = ["支出", "支払者", "合計", ...members.map((m) => m.name)];
+    const rows = result.breakdowns.map((b) => [
+      b.expense.title,
+      name(b.expense.payerId),
+      String(b.expense.amount),
+      ...members.map((m) => String(b.amounts[m.id] ?? "")),
+    ]);
+    rows.push([
+      "合計", "", "",
+      ...members.map((m) => String(result.totalBurden[m.id] ?? 0)),
+    ]);
+    rows.push([
+      "支払済", "", "",
+      ...members.map((m) => String(result.totalPaid[m.id] ?? 0)),
+    ]);
+    rows.push([
+      "差額", "", "",
+      ...members.map((m) => String(result.balance[m.id] ?? 0)),
+    ]);
+    for (const s of result.settlements) {
+      rows.push([
+        `精算: ${name(s.fromId)}→${name(s.toId)}`, "", "",
+        ...members.map((m) =>
+          m.id === s.fromId
+            ? String(s.amount)
+            : m.id === s.toId
+            ? String(-s.amount)
+            : ""
+        ),
+      ]);
+    }
+    if (result.settlements.length > 0) {
+      rows.push([
+        "精算後", "", "",
+        ...members.map((m) => {
+          const bal = result.balance[m.id] ?? 0;
+          const adj = result.settlements.reduce((sum, s) => {
+            if (s.fromId === m.id) return sum + s.amount;
+            if (s.toId === m.id) return sum - s.amount;
+            return sum;
+          }, 0);
+          return String(Math.round(bal + adj));
+        }),
+      ]);
+    }
+    const csv = [header, ...rows].map((r) => r.join(",")).join("\n");
+    downloadCSV(csv, "settlement.csv");
   };
 
   // 既存イベントへの保存。楽観ロックで競合を検出し、競合したら最新を取得して
@@ -2012,20 +1967,17 @@ export default function EventApp({ eventId }: { eventId?: string }) {
                 ))}
             </div>
             <HeaderMenu
-              onCopyRequest={() =>
-                saveAndCopyUrl(
-                  "expenses",
-                  "ご自身が立替えた支払いを登録してください",
-                  "依頼文をコピーしました！"
-                )
-              }
-              copyRequestDisabled={saving || members.length < 2}
-              onCopyResult={copySettlementsToClipboard}
-              copyResultDisabled={!result || result.settlements.length === 0}
+              activeTab={activeTab}
               onEditName={() => setEditingName(true)}
               onNewEvent={() => {
                 window.location.href = "/";
               }}
+              onExportMembers={exportMembers}
+              onImportMembers={importMembers}
+              onExportExpenses={exportExpenses}
+              onImportExpenses={importExpenses}
+              onExportResult={exportResultCSV}
+              exportResultDisabled={!result}
             />
           </div>
         </div>
@@ -2047,7 +1999,10 @@ export default function EventApp({ eventId }: { eventId?: string }) {
                         ? "border-[var(--accent)]/40 text-[var(--foreground)]"
                         : "border-transparent text-[var(--muted)] hover:text-[var(--foreground)]"
                     }`}
-                    onClick={() => setActiveTab(step.id)}
+                    onClick={() => {
+                      setActiveTab(step.id);
+                      setImportError(null);
+                    }}
                   >
                     <step.Icon />
                     {step.label}
@@ -2077,6 +2032,7 @@ export default function EventApp({ eventId }: { eventId?: string }) {
             setExpenses={setExpenses}
             copied={copied}
             saving={saving}
+            importError={importError}
             onCopyRequest={() =>
               saveAndCopyUrl(
                 "expenses",
