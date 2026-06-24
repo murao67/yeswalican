@@ -987,6 +987,68 @@ function BreakdownTableInner({
   );
 }
 
+// DOM要素をPNG画像のBlobへ変換する（外部ライブラリ不要）。
+// 計算済みスタイルをインライン化したクローンをSVGのforeignObjectに埋め込み、
+// canvasへ描画してPNG化する。精算表は画像を含まないためcanvasはtaintされない。
+async function elementToPngBlob(node: HTMLElement): Promise<Blob | null> {
+  const rect = node.getBoundingClientRect();
+  const width = Math.ceil(rect.width);
+  const height = Math.ceil(rect.height);
+  if (!width || !height) return null;
+
+  // 外部CSSはforeignObject内に適用されないため、計算済みスタイルを再帰的に
+  // インライン化し、不要なclassは取り除いてシリアライズを安定させる。
+  const inline = (src: Element, dst: Element) => {
+    const cs = window.getComputedStyle(src);
+    let css = "";
+    for (let i = 0; i < cs.length; i++) {
+      const prop = cs[i];
+      css += `${prop}:${cs.getPropertyValue(prop)};`;
+    }
+    dst.setAttribute("style", css);
+    dst.removeAttribute("class");
+    const sc = src.children;
+    const dc = dst.children;
+    for (let i = 0; i < sc.length; i++) {
+      inline(sc[i], dc[i]);
+    }
+  };
+
+  const clone = node.cloneNode(true) as HTMLElement;
+  inline(node, clone);
+  clone.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
+
+  const serialized = new XMLSerializer().serializeToString(clone);
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">` +
+    `<foreignObject x="0" y="0" width="100%" height="100%">${serialized}</foreignObject>` +
+    `</svg>`;
+  // データURLを使う（blob:のSVGは一部ブラウザでcanvasをtaintするため）。
+  const dataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+
+  const img = new Image();
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve();
+    img.onerror = () => reject(new Error("SVG画像の読み込みに失敗しました"));
+    img.src = dataUrl;
+  });
+
+  const scale = 2; // 高解像度（Retina相当）で書き出す
+  const canvas = document.createElement("canvas");
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.scale(scale, scale);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+  ctx.drawImage(img, 0, 0);
+
+  return await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob((b) => resolve(b), "image/png")
+  );
+}
+
 function BreakdownTable({
   members,
   result,
@@ -997,6 +1059,45 @@ function BreakdownTable({
   name: (id: string) => string;
 }) {
   const [showModal, setShowModal] = useState(false);
+  const [imageCopied, setImageCopied] = useState(false);
+  const captureRef = useRef<HTMLDivElement>(null);
+
+  // モーダル内の精算表を画像としてクリップボードへコピー（不可ならダウンロード）
+  const copyAsImage = useCallback(async () => {
+    const target = captureRef.current;
+    if (!target) return;
+    let blob: Blob | null = null;
+    try {
+      blob = await elementToPngBlob(target);
+    } catch {
+      blob = null;
+    }
+    if (!blob) return;
+
+    const clipboard = navigator.clipboard;
+    try {
+      if (
+        typeof ClipboardItem !== "undefined" &&
+        clipboard &&
+        "write" in clipboard
+      ) {
+        await clipboard.write([new ClipboardItem({ "image/png": blob })]);
+        setImageCopied(true);
+        setTimeout(() => setImageCopied(false), 2000);
+        return;
+      }
+    } catch {
+      // 画像のクリップボード書き込みに非対応／拒否された場合はダウンロードへ
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "精算表.png";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, []);
 
   return (
     <div>
@@ -1030,28 +1131,54 @@ function BreakdownTable({
           onClick={() => setShowModal(false)}
         >
           <div
-            className="bg-white rounded-xl shadow-2xl max-w-[95vw] max-h-[90vh] overflow-auto p-6 animate-in"
+            className="relative bg-white rounded-xl shadow-2xl max-w-[95vw] max-h-[90vh] flex flex-col animate-in"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-base">精算表</h3>
-              <button
-                className="btn-secondary text-sm !px-3 !py-1"
-                onClick={() => setShowModal(false)}
+            {/* 左上：画像としてコピー（スクロールに関わらず常時表示） */}
+            <button
+              type="button"
+              className="btn-secondary text-xs !px-2.5 !py-1 absolute top-3 left-3 z-10"
+              onClick={copyAsImage}
+            >
+              {imageCopied ? "コピーしました" : "画像としてコピー"}
+            </button>
+            {/* 右上：閉じる（×・スクロールに関わらず常時表示） */}
+            <button
+              type="button"
+              aria-label="閉じる"
+              className="absolute top-3 right-3 z-10 flex h-8 w-8 items-center justify-center rounded-full text-[var(--muted)] transition-colors hover:bg-[var(--accent-bg)] hover:text-[var(--foreground)]"
+              onClick={() => setShowModal(false)}
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
               >
-                閉じる
-              </button>
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+            {/* スクロール領域（上部のボタンは固定されたまま中身だけスクロール） */}
+            <div className="overflow-auto px-6 pb-6 pt-14">
+              <div ref={captureRef} className="w-fit bg-white">
+                <BreakdownTableInner
+                  members={members}
+                  result={result}
+                  name={name}
+                  full
+                />
+                <p className="text-xs text-[var(--muted)] mt-3">
+                  <span className="inline-block w-2 h-2 bg-[#fffbeb] border border-[#fde68a] rounded-sm mr-1" />
+                  * = 個別指定額 / それ以外は倍率に基づく自動按分
+                </p>
+              </div>
             </div>
-            <BreakdownTableInner
-              members={members}
-              result={result}
-              name={name}
-              full
-            />
-            <p className="text-xs text-[var(--muted)] mt-3">
-              <span className="inline-block w-2 h-2 bg-[#fffbeb] border border-[#fde68a] rounded-sm mr-1" />
-              * = 個別指定額 / それ以外は倍率に基づく自動按分
-            </p>
           </div>
         </div>
       )}
