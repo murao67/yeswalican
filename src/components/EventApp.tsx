@@ -990,11 +990,37 @@ function BreakdownTableInner({
 // DOM要素をPNG画像のBlobへ変換する（外部ライブラリ不要）。
 // 計算済みスタイルをインライン化したクローンをSVGのforeignObjectに埋め込み、
 // canvasへ描画してPNG化する。精算表は画像を含まないためcanvasはtaintされない。
+//
+// 注意: foreignObject内では埋め込みWebフォント（Geist）が使えず代替フォントで
+// 再レイアウトされるため、文字幅・行高が画面表示より大きくなり、右端や下端が
+// 見切れることがある。そこでキャンバスを余裕を持って大きく確保して描画し、描画後に
+// 「白でない実コンテンツの範囲」を走査して検出し、その範囲＋余白へクロップする
+// （フォント差に依存せず欠けを防げる）。
 async function elementToPngBlob(node: HTMLElement): Promise<Blob | null> {
   const rect = node.getBoundingClientRect();
-  const width = Math.ceil(rect.width);
-  const height = Math.ceil(rect.height);
-  if (!width || !height) return null;
+  // 折り返し差ではみ出しても収まるよう、丸め寸法とスクロール実寸の大きい方を基準にする。
+  const baseW = Math.ceil(
+    Math.max(rect.width, node.scrollWidth, node.offsetWidth)
+  );
+  const baseH = Math.ceil(
+    Math.max(rect.height, node.scrollHeight, node.offsetHeight)
+  );
+  if (!baseW || !baseH) return null;
+
+  const pad = 16; // 画像の余白(px)
+  // 代替フォントによる再レイアウトのはみ出しを十分吸収できる大きさを確保する。
+  const canvasW = baseW + pad * 2 + Math.ceil(baseW * 0.3) + 64;
+  const canvasH = baseH + pad * 2 + Math.ceil(baseH * 0.3) + 64;
+  // 高解像度（Retina相当の2倍）で書き出す。ただし参加者が極端に多い大きな表でも
+  // ブラウザのcanvas上限（最大辺・最大面積）を超えて白紙化しないよう倍率を抑える。
+  const MAX_DIM = 8192;
+  const MAX_AREA = 16_000_000;
+  const scale = Math.min(
+    2,
+    MAX_DIM / canvasW,
+    MAX_DIM / canvasH,
+    Math.sqrt(MAX_AREA / (canvasW * canvasH))
+  );
 
   // 外部CSSはforeignObject内に適用されないため、計算済みスタイルを再帰的に
   // インライン化し、不要なclassは取り除いてシリアライズを安定させる。
@@ -1020,7 +1046,7 @@ async function elementToPngBlob(node: HTMLElement): Promise<Blob | null> {
 
   const serialized = new XMLSerializer().serializeToString(clone);
   const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${canvasW}" height="${canvasH}">` +
     `<foreignObject x="0" y="0" width="100%" height="100%">${serialized}</foreignObject>` +
     `</svg>`;
   // データURLを使う（blob:のSVGは一部ブラウザでcanvasをtaintするため）。
@@ -1033,19 +1059,57 @@ async function elementToPngBlob(node: HTMLElement): Promise<Blob | null> {
     img.src = dataUrl;
   });
 
-  const scale = 2; // 高解像度（Retina相当）で書き出す
   const canvas = document.createElement("canvas");
-  canvas.width = width * scale;
-  canvas.height = height * scale;
+  canvas.width = canvasW * scale;
+  canvas.height = canvasH * scale;
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
   ctx.scale(scale, scale);
   ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, width, height);
-  ctx.drawImage(img, 0, 0);
+  ctx.fillRect(0, 0, canvasW, canvasH);
+  ctx.drawImage(img, pad, pad);
+
+  // 実際に描画された（白でない）コンテンツの右端・下端を検出してクロップする。
+  // 走査・クロップは実画素（scale適用後）座標で行う。
+  let cropW = canvas.width;
+  let cropH = canvas.height;
+  try {
+    const dw = canvas.width;
+    const dh = canvas.height;
+    const data = ctx.getImageData(0, 0, dw, dh).data;
+    let maxX = 0;
+    let maxY = 0;
+    for (let y = 0; y < dh; y += 2) {
+      for (let x = dw - 1; x >= 0; x -= 2) {
+        const i = (y * dw + x) * 4;
+        if (data[i] < 250 || data[i + 1] < 250 || data[i + 2] < 250) {
+          if (x > maxX) maxX = x;
+          if (y > maxY) maxY = y;
+          break;
+        }
+      }
+    }
+    if (maxX > 0 && maxY > 0) {
+      cropW = Math.min(dw, maxX + pad * scale);
+      cropH = Math.min(dh, maxY + pad * scale);
+    } else {
+      // 白以外の画素が無い＝描画失敗や空表。巨大な白画像を返さず失敗扱いにする。
+      return null;
+    }
+  } catch {
+    // 走査に失敗した場合は余白付きの大きいキャンバスをそのまま使う（欠けは生じない）。
+  }
+
+  let outCanvas = canvas;
+  if (cropW < canvas.width || cropH < canvas.height) {
+    outCanvas = document.createElement("canvas");
+    outCanvas.width = cropW;
+    outCanvas.height = cropH;
+    outCanvas.getContext("2d")?.drawImage(canvas, 0, 0);
+  }
 
   return await new Promise<Blob | null>((resolve) =>
-    canvas.toBlob((b) => resolve(b), "image/png")
+    outCanvas.toBlob((b) => resolve(b), "image/png")
   );
 }
 
@@ -1060,7 +1124,13 @@ function BreakdownTable({
 }) {
   const [showModal, setShowModal] = useState(false);
   const [imageCopied, setImageCopied] = useState(false);
+  const [copyError, setCopyError] = useState(false);
   const captureRef = useRef<HTMLDivElement>(null);
+
+  const flashCopyError = useCallback(() => {
+    setCopyError(true);
+    setTimeout(() => setCopyError(false), 2000);
+  }, []);
 
   // モーダル内の精算表を画像としてクリップボードへコピー（不可ならダウンロード）
   const copyAsImage = useCallback(async () => {
@@ -1069,10 +1139,15 @@ function BreakdownTable({
     let blob: Blob | null = null;
     try {
       blob = await elementToPngBlob(target);
-    } catch {
+    } catch (e) {
+      // 失敗を握り潰さずログに残す（原因調査のため）
+      console.error("精算表の画像生成に失敗しました", e);
       blob = null;
     }
-    if (!blob) return;
+    if (!blob) {
+      flashCopyError();
+      return;
+    }
 
     const clipboard = navigator.clipboard;
     try {
@@ -1089,15 +1164,20 @@ function BreakdownTable({
     } catch {
       // 画像のクリップボード書き込みに非対応／拒否された場合はダウンロードへ
     }
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "精算表.png";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  }, []);
+    try {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "精算表.png";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("精算表画像のダウンロードに失敗しました", e);
+      flashCopyError();
+    }
+  }, [flashCopyError]);
 
   return (
     <div>
@@ -1140,7 +1220,11 @@ function BreakdownTable({
               className="btn-secondary text-xs !px-2.5 !py-1 absolute top-3 left-3 z-10"
               onClick={copyAsImage}
             >
-              {imageCopied ? "コピーしました" : "画像としてコピー"}
+              {imageCopied
+                ? "コピーしました"
+                : copyError
+                ? "コピーできませんでした"
+                : "画像としてコピー"}
             </button>
             {/* 右上：閉じる（×・スクロールに関わらず常時表示） */}
             <button
