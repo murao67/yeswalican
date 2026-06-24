@@ -66,41 +66,36 @@ const IconCopy = () => (
   </svg>
 );
 
-// 共有ボタン（text でボタン内ラベルを指定、コピー後はトーストで結果を表示）
+// 共有ボタン（text でボタン内ラベルを指定。コピー完了トーストはヘッダー直下で一元表示する）
 function CopyIconButton({
   label,
   text = "ページを共有",
-  copiedLabel,
   copied,
   disabled,
   onClick,
 }: {
   label: string;
   text?: string;
-  copiedLabel: string;
   copied: boolean;
   disabled?: boolean;
   onClick: () => void;
 }) {
   return (
-    <>
-      <button
-        type="button"
-        aria-label={label}
-        title={label}
-        disabled={disabled}
-        onClick={onClick}
-        className={`h-7 px-2.5 rounded-lg border inline-flex items-center justify-center gap-1 shrink-0 text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
-          copied
-            ? "bg-[var(--success)] text-white border-[var(--success)]"
-            : "text-[var(--muted)] border-[var(--border)] enabled:hover:border-[var(--accent)] enabled:hover:text-[var(--accent)]"
-        }`}
-      >
-        <IconCopy />
-        {text}
-      </button>
-      {copied && <CopyToast label={copiedLabel} />}
-    </>
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={onClick}
+      className={`h-7 px-2.5 rounded-lg border inline-flex items-center justify-center gap-1 shrink-0 text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+        copied
+          ? "bg-[var(--success)] text-white border-[var(--success)]"
+          : "text-[var(--muted)] border-[var(--border)] enabled:hover:border-[var(--accent)] enabled:hover:text-[var(--accent)]"
+      }`}
+    >
+      <IconCopy />
+      {text}
+    </button>
   );
 }
 
@@ -852,7 +847,6 @@ function ExpenseSection({
           <CopyIconButton
             label="登録依頼用の文章をコピー"
             text="登録を依頼"
-            copiedLabel="依頼文をコピーしました！"
             copied={copied}
             disabled={saving || members.length < 2}
             onClick={onCopyRequest}
@@ -1225,8 +1219,8 @@ function BreakdownTable({
   );
 }
 
-// --- 精算結果 ---
-function CopySettlementsButton({
+// 精算方法の共有テキストを組み立てる（セクションのボタンと右上メニューで共用）
+function buildSettlementsText({
   settlements,
   name,
   eventUrl,
@@ -1236,24 +1230,42 @@ function CopySettlementsButton({
   name: (id: string) => string;
   eventUrl?: string;
   eventName?: string;
+}): string {
+  const lines = settlements.map(
+    (s) => `${name(s.fromId)} → ${name(s.toId)}: ¥${s.amount.toLocaleString()}`
+  );
+  if (eventName?.trim()) lines.unshift(`【${eventName.trim()}】`, "");
+  if (eventUrl) lines.push("", eventUrl);
+  return lines.join("\n");
+}
+
+// --- 精算結果 ---
+function CopySettlementsButton({
+  settlements,
+  name,
+  eventUrl,
+  eventName,
+  onCopied,
+}: {
+  settlements: { fromId: string; toId: string; amount: number }[];
+  name: (id: string) => string;
+  eventUrl?: string;
+  eventName?: string;
+  onCopied: (label: string) => void;
 }) {
   const [copied, setCopied] = useState(false);
   const copy = () => {
-    const lines = settlements
-      .map((s) => `${name(s.fromId)} → ${name(s.toId)}: ¥${s.amount.toLocaleString()}`);
-    if (eventName?.trim()) lines.unshift(`【${eventName.trim()}】`, "");
-    if (eventUrl) lines.push("", eventUrl);
-    const text = lines.join("\n");
+    const text = buildSettlementsText({ settlements, name, eventUrl, eventName });
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+      onCopied("精算方法をコピーしました！");
     });
   };
   return (
     <CopyIconButton
       label="精算方法をテキストでコピー"
       text="結果を共有"
-      copiedLabel="精算方法をコピーしました！"
       copied={copied}
       onClick={copy}
     />
@@ -1265,11 +1277,13 @@ function ResultSection({
   result,
   eventUrl,
   eventName,
+  onCopied,
 }: {
   members: Member[];
   result: CalcResult | null;
   eventUrl?: string;
   eventName?: string;
+  onCopied: (label: string) => void;
 }) {
   const name = (id: string) => members.find((m) => m.id === id)?.name ?? "?";
 
@@ -1350,6 +1364,7 @@ function ResultSection({
             name={name}
             eventUrl={eventUrl}
             eventName={eventName}
+            onCopied={onCopied}
           />
         )}
       </div>
@@ -1467,6 +1482,143 @@ const STEPS: {
   { id: "result", label: "精算結果", Icon: IconResult, step: 3 },
 ];
 
+// 三点リーダ（縦）アイコン。右上のメニューを開くボタンに使う。
+const IconKebab = () => (
+  <svg
+    width="18"
+    height="18"
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    aria-hidden="true"
+  >
+    <circle cx="12" cy="5" r="1.75" />
+    <circle cx="12" cy="12" r="1.75" />
+    <circle cx="12" cy="19" r="1.75" />
+  </svg>
+);
+
+const IconPlus = () => (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M12 5v14M5 12h14" />
+  </svg>
+);
+
+// 右上メニューの各項目（無効時は理由を title で添える）
+function MenuItem({
+  icon,
+  label,
+  disabled,
+  disabledHint,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  disabled?: boolean;
+  disabledHint?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      disabled={disabled}
+      title={disabled ? disabledHint : undefined}
+      onClick={onClick}
+      className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left text-sm text-[var(--foreground)] transition-colors enabled:hover:bg-[var(--accent-bg)] enabled:hover:text-[var(--accent)] disabled:opacity-40 disabled:cursor-not-allowed"
+    >
+      <span className="shrink-0 text-[var(--muted)]">{icon}</span>
+      {label}
+    </button>
+  );
+}
+
+// --- 右上のメニュー（共有文コピー・イベント名編集・新規作成） ---
+function HeaderMenu({
+  onCopyRequest,
+  copyRequestDisabled,
+  onCopyResult,
+  copyResultDisabled,
+  onEditName,
+  onNewEvent,
+}: {
+  onCopyRequest: () => void;
+  copyRequestDisabled: boolean;
+  onCopyResult: () => void;
+  copyResultDisabled: boolean;
+  onEditName: () => void;
+  onNewEvent: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const close = () => setOpen(false);
+  // 選択後はメニューを閉じてから処理を実行する
+  const run = (fn: () => void) => () => {
+    close();
+    fn();
+  };
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        aria-label="メニュー"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="shrink-0 w-9 h-9 flex items-center justify-center rounded-lg text-[var(--muted)] hover:text-[var(--accent)] hover:bg-[var(--accent-bg)] transition-colors"
+      >
+        <IconKebab />
+      </button>
+
+      {open && (
+        <>
+          {/* 背景クリックで閉じる */}
+          <div className="fixed inset-0 z-30" onClick={close} />
+          <div
+            className="absolute right-0 top-full mt-1.5 z-40 w-64 bg-white border border-[var(--border)] rounded-xl shadow-lg p-1.5 animate-in"
+            role="menu"
+          >
+            <MenuItem
+              icon={<IconCopy />}
+              label="立替登録の依頼文をコピー"
+              disabled={copyRequestDisabled}
+              disabledHint="参加者を2人以上登録すると使えます"
+              onClick={run(onCopyRequest)}
+            />
+            <MenuItem
+              icon={<IconCopy />}
+              label="精算結果の共有文をコピー"
+              disabled={copyResultDisabled}
+              disabledHint="精算が必要な結果がまだありません"
+              onClick={run(onCopyResult)}
+            />
+            <MenuItem
+              icon={<IconPencil />}
+              label="イベント名を編集"
+              onClick={run(onEditName)}
+            />
+            <div className="my-1 border-t border-[var(--border)]" />
+            <MenuItem
+              icon={<IconPlus />}
+              label="新しいイベントを作成"
+              onClick={run(onNewEvent)}
+            />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // 自動保存の状態。ヘッダーに控えめに表示する。
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
@@ -1492,6 +1644,8 @@ export default function EventApp({ eventId }: { eventId?: string }) {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(!!eventId);
   const [copied, setCopied] = useState(false);
+  // コピー完了トースト（セクションのボタン・右上メニュー共通でここに表示）
+  const [toast, setToast] = useState<string | null>(null);
   const [editingName, setEditingName] = useState(false);
   // 楽観ロック用。読み込み or 最後に保存した時点の updated_at を保持する。
   const [baseUpdatedAt, setBaseUpdatedAt] = useState<string | null>(null);
@@ -1550,6 +1704,32 @@ export default function EventApp({ eventId }: { eventId?: string }) {
     members.length > 0 && expenses.length > 0
       ? calculate(members, expenses)
       : null;
+
+  // コピー完了トーストを一定時間表示する
+  const showToast = useCallback((label: string) => {
+    setToast(label);
+    window.setTimeout(() => setToast(null), 2000);
+  }, []);
+
+  // 精算結果の共有文をクリップボードへコピーする（右上メニューから利用）
+  const copySettlementsToClipboard = () => {
+    if (!result || result.settlements.length === 0) return;
+    const name = (mid: string) =>
+      members.find((m) => m.id === mid)?.name ?? "?";
+    const eventUrl =
+      typeof window !== "undefined" && id
+        ? `${window.location.origin}/e/${id}#result`
+        : undefined;
+    const text = buildSettlementsText({
+      settlements: result.settlements,
+      name,
+      eventUrl,
+      eventName,
+    });
+    void navigator.clipboard
+      .writeText(text)
+      .then(() => showToast("精算方法をコピーしました！"));
+  };
 
   // 既存イベントへの保存。楽観ロックで競合を検出し、競合したら最新を取得して
   // 3-wayマージ → 再試行することで、他者の編集を消さずに保存を成立させる。
@@ -1647,7 +1827,7 @@ export default function EventApp({ eventId }: { eventId?: string }) {
   }, [id, flushSave]);
 
   const saveAndCopyUrl = useCallback(
-    async (hash?: TabId, message?: string) => {
+    async (hash?: TabId, message?: string, toastLabel = "コピーしました！") => {
       setSaving(true);
       // 保存（DB通信）を await してから clipboard.writeText を呼ぶと、
       // iOS Safari などではユーザー操作の許可（transient activation）が
@@ -1697,13 +1877,14 @@ export default function EventApp({ eventId }: { eventId?: string }) {
         }
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
+        showToast(toastLabel);
       } catch {
         // 保存またはコピーに失敗した場合はトーストを出さない
       } finally {
         setSaving(false);
       }
     },
-    [id, eventName, data, commitData]
+    [id, eventName, data, commitData, showToast]
   );
 
   // 初回: イベント名を登録して専用URLを発行 → 参加者登録へ
@@ -1788,56 +1969,64 @@ export default function EventApp({ eventId }: { eventId?: string }) {
                 }}
               />
             ) : (
-              <button
-                type="button"
-                onClick={() => setEditingName(true)}
-                title="クリックして編集"
-                className="group inline-flex items-center gap-1 min-w-0 text-sm text-[var(--foreground)] font-medium hover:text-[var(--accent)] transition-colors"
-              >
-                <span className="truncate">
-                  {eventName || "（イベント名未設定）"}
-                </span>
-                <span className="shrink-0 text-[var(--muted)] opacity-50 group-hover:opacity-100 group-hover:text-[var(--accent)] transition-all">
-                  <IconPencil />
-                </span>
-              </button>
-            )}
-          </div>
-          {/* 自動保存ステータス */}
-          <div className="shrink-0 text-xs" aria-live="polite">
-            {saveStatus === "saving" && (
-              <span className="text-[var(--muted)]">保存中…</span>
-            )}
-            {saveStatus === "saved" && (
-              <span className="inline-flex items-center gap-1 font-semibold text-[var(--success)]">
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-                保存しました
+              <span className="truncate min-w-0 text-sm text-[var(--foreground)] font-medium">
+                {eventName || "（イベント名未設定）"}
               </span>
             )}
-            {saveStatus === "error" &&
-              (conflict ? (
-                <span className="text-red-600">保存できません</span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => void flushSave()}
-                  className="text-red-600 underline"
-                >
-                  保存に失敗 · 再試行
-                </button>
-              ))}
+          </div>
+          {/* 自動保存ステータス＋メニュー */}
+          <div className="shrink-0 flex items-center gap-1">
+            <div className="text-xs" aria-live="polite">
+              {saveStatus === "saving" && (
+                <span className="text-[var(--muted)]">保存中…</span>
+              )}
+              {saveStatus === "saved" && (
+                <span className="inline-flex items-center gap-1 font-semibold text-[var(--success)]">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  保存しました
+                </span>
+              )}
+              {saveStatus === "error" &&
+                (conflict ? (
+                  <span className="text-red-600">保存できません</span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void flushSave()}
+                    className="text-red-600 underline"
+                  >
+                    保存に失敗 · 再試行
+                  </button>
+                ))}
+            </div>
+            <HeaderMenu
+              onCopyRequest={() =>
+                saveAndCopyUrl(
+                  "expenses",
+                  "ご自身が立替えた支払いを登録してください",
+                  "依頼文をコピーしました！"
+                )
+              }
+              copyRequestDisabled={saving || members.length < 2}
+              onCopyResult={copySettlementsToClipboard}
+              copyResultDisabled={!result || result.settlements.length === 0}
+              onEditName={() => setEditingName(true)}
+              onNewEvent={() => {
+                window.location.href = "/";
+              }}
+            />
           </div>
         </div>
 
@@ -1891,18 +2080,22 @@ export default function EventApp({ eventId }: { eventId?: string }) {
             onCopyRequest={() =>
               saveAndCopyUrl(
                 "expenses",
-                "ご自身が立替えた支払いを登録してください"
+                "ご自身が立替えた支払いを登録してください",
+                "依頼文をコピーしました！"
               )
             }
           />
         )}
 
         {activeTab === "result" && (
-          <ResultSection members={members} result={result} eventName={eventName} eventUrl={id ? `${typeof window !== "undefined" ? window.location.origin : ""}/e/${id}#result` : undefined} />
+          <ResultSection members={members} result={result} eventName={eventName} eventUrl={id ? `${typeof window !== "undefined" ? window.location.origin : ""}/e/${id}#result` : undefined} onCopied={showToast} />
         )}
       </main>
 
       <DisclaimerFooter />
+
+      {/* コピー完了トースト（セクションのボタン・右上メニュー共通） */}
+      {toast && <CopyToast label={toast} />}
     </div>
   );
 }
