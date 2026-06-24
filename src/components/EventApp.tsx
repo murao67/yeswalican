@@ -1125,57 +1125,72 @@ function BreakdownTable({
   const [showModal, setShowModal] = useState(false);
   const [imageCopied, setImageCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
+  // クリップボード書き込み不可な環境（LINE等のアプリ内ブラウザ）向けに、
+  // 生成画像を表示して「長押し保存」してもらうためのObjectURL。
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const captureRef = useRef<HTMLDivElement>(null);
+
+  // 表示が切り替わる／閉じるタイミングでObjectURLを解放する。
+  useEffect(() => {
+    if (!previewUrl) return;
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [previewUrl]);
 
   const flashCopyError = useCallback(() => {
     setCopyError(true);
     setTimeout(() => setCopyError(false), 2000);
   }, []);
 
-  // モーダル内の精算表を画像としてクリップボードへコピー（不可ならダウンロード）
-  const copyAsImage = useCallback(async () => {
+  // モーダル内の精算表を画像として取得する。クリップボードへ書き込める環境では
+  // そのままコピーし、書き込めない環境（LINE等のアプリ内ブラウザ）では生成画像を
+  // オーバーレイ表示して「長押しで保存」やダウンロードに誘導する。
+  const copyAsImage = useCallback(() => {
     const target = captureRef.current;
     if (!target) return;
-    let blob: Blob | null = null;
-    try {
-      blob = await elementToPngBlob(target);
-    } catch (e) {
-      // 失敗を握り潰さずログに残す（原因調査のため）
-      console.error("精算表の画像生成に失敗しました", e);
-      blob = null;
-    }
-    if (!blob) {
-      flashCopyError();
-      return;
-    }
 
-    const clipboard = navigator.clipboard;
-    try {
-      if (
-        typeof ClipboardItem !== "undefined" &&
-        clipboard &&
-        "write" in clipboard
-      ) {
-        await clipboard.write([new ClipboardItem({ "image/png": blob })]);
-        setImageCopied(true);
-        setTimeout(() => setImageCopied(false), 2000);
-        return;
-      }
-    } catch {
-      // 画像のクリップボード書き込みに非対応／拒否された場合はダウンロードへ
-    }
-    try {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "精算表.png";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      console.error("精算表画像のダウンロードに失敗しました", e);
-      flashCopyError();
+    // 画像生成はPromiseとして保持し、クリップボードへは未解決のまま渡す。これにより
+    // write()をクリック直後に同期的に呼べ、ユーザー操作の許可が維持される
+    // （Safari/WebKitはawaitを挟んだ後のwrite()を許可しないため）。
+    const blobPromise = elementToPngBlob(target).then((b) => {
+      if (!b) throw new Error("精算表の画像生成に失敗しました");
+      return b;
+    });
+
+    // 生成画像をオーバーレイ表示し、長押し保存／ダウンロードに誘導するフォールバック。
+    const showForSave = () => {
+      blobPromise
+        .then((b) => setPreviewUrl(URL.createObjectURL(b)))
+        .catch((e) => {
+          console.error("精算表の画像生成に失敗しました", e);
+          flashCopyError();
+        });
+    };
+
+    // LINE等のアプリ内ブラウザは画像のクリップボード書き込みに未対応のことが多い。
+    // その場合はクリップボードを試さず、最初から保存用の表示に切り替える。
+    const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+    const isInAppBrowser = /\bLine\/|FBAN|FBAV|Instagram/i.test(ua);
+    const canClipboard =
+      !isInAppBrowser &&
+      typeof ClipboardItem !== "undefined" &&
+      typeof navigator !== "undefined" &&
+      !!navigator.clipboard &&
+      typeof navigator.clipboard.write === "function";
+
+    if (canClipboard) {
+      navigator.clipboard
+        .write([new ClipboardItem({ "image/png": blobPromise })])
+        .then(() => {
+          setImageCopied(true);
+          setTimeout(() => setImageCopied(false), 2000);
+        })
+        .catch((e) => {
+          // 書き込み不可／拒否 → 保存用の表示にフォールバック
+          console.error("画像のクリップボードコピーに失敗しました", e);
+          showForSave();
+        });
+    } else {
+      showForSave();
     }
   }, [flashCopyError]);
 
@@ -1263,6 +1278,59 @@ function BreakdownTable({
                 </p>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* クリップボード不可な環境（LINE等）向け：生成画像を表示して長押し保存／ダウンロード */}
+      {previewUrl && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setPreviewUrl(null)}
+        >
+          <div
+            className="relative bg-white rounded-xl shadow-2xl max-w-[95vw] max-h-[90vh] flex flex-col p-4 animate-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              aria-label="閉じる"
+              className="absolute top-3 right-3 z-10 flex h-8 w-8 items-center justify-center rounded-full text-[var(--muted)] transition-colors hover:bg-[var(--accent-bg)] hover:text-[var(--foreground)]"
+              onClick={() => setPreviewUrl(null)}
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+            <p className="text-sm font-medium pr-10 mb-2">
+              画像を長押しして保存・共有できます
+            </p>
+            <div className="overflow-auto">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={previewUrl}
+                alt="精算表"
+                className="block max-w-full h-auto rounded border border-[var(--border)]"
+              />
+            </div>
+            <a
+              href={previewUrl}
+              download="精算表.png"
+              className="btn-secondary text-sm !px-3 !py-1 mt-3 self-center"
+            >
+              ダウンロード
+            </a>
           </div>
         </div>
       )}
