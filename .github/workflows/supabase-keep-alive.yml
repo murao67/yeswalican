@@ -1,0 +1,39 @@
+# Supabase 無料プランの自動一時停止対策。
+#
+# Supabase の停止判定は「過去1週間に十分なDBアクティビティ（目安: 1日数回の
+# リクエスト）があるか」で行われるため、Vercel Cron（Hobby プランの上限で
+# 毎日1回。vercel.json 参照）だけでは不足する。ここでは GitHub Actions から
+# 6時間おきに Supabase REST API を直接クエリして不足分を補う。
+#
+# 必要な設定: リポジトリシークレット SUPABASE_ANON_KEY
+#   （値は .env.local / Vercel 環境変数の NEXT_PUBLIC_SUPABASE_ANON_KEY と同じ）
+#
+# 注意: リポジトリに60日間コミットがないと GitHub がスケジュール実行を
+# 自動停止する（事前に警告メールが届き、Actions タブから再有効化できる）。
+name: Supabase keep-alive
+
+on:
+  schedule:
+    # 6時間おき（UTC）。Vercel Cron の 03:00 UTC と時間帯をずらしてある。
+    - cron: "17 0,6,12,18 * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Query Supabase REST to generate DB activity
+        env:
+          SUPABASE_URL: https://tpoelnpopgnkxeddbchk.supabase.co
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::error::リポジトリシークレット SUPABASE_ANON_KEY が未設定です（値は NEXT_PUBLIC_SUPABASE_ANON_KEY と同じ）"
+            exit 1
+          fi
+          curl -fsS --retry 3 --retry-delay 30 --retry-all-errors \
+            "$SUPABASE_URL/rest/v1/events?select=id&limit=1" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            -o /dev/null -w "keep-alive HTTP %{http_code}\n"

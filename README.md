@@ -29,6 +29,15 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
+## Supabase keep-alive（無料プランの自動停止対策）
+
+Supabase 無料プランは「過去1週間に十分なDBアクティビティ（目安: 1日数回のリクエスト）」がないとプロジェクトが自動一時停止されるため、2系統で定期アクセスを発生させている。
+
+- **Vercel Cron**: 毎日 03:00 UTC に `/api/keep-alive` を実行（[vercel.json](vercel.json)。Hobby プランは日次実行が上限）。`CRON_SECRET` 環境変数で保護。
+- **GitHub Actions**: 6時間おきに Supabase REST を直接クエリ（[.github/workflows/supabase-keep-alive.yml](.github/workflows/supabase-keep-alive.yml)）。
+  - リポジトリシークレット `SUPABASE_ANON_KEY` の設定が必要（`.env.local` の `NEXT_PUBLIC_SUPABASE_ANON_KEY` と同じ値）。
+  - リポジトリに60日間コミットがないと GitHub がスケジュール実行を自動停止する（警告メール後。Actions タブから再有効化可能）。
+
 ## Deploy on Vercel
 
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
