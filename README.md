@@ -36,7 +36,10 @@ Supabase 無料プランは「過去1週間に十分なDBアクティビティ�
 - **Vercel Cron**: 毎日 03:00 UTC に `/api/keep-alive` を実行（[vercel.json](vercel.json)。Hobby プランは日次実行が上限）。`CRON_SECRET` 環境変数で保護。
 - **GitHub Actions**: 6時間おきに Supabase REST を直接クエリ（[.github/workflows/supabase-keep-alive.yml](.github/workflows/supabase-keep-alive.yml)）。
   - リポジトリシークレット `SUPABASE_ANON_KEY` の設定が必要（`.env.local` の `NEXT_PUBLIC_SUPABASE_ANON_KEY` と同じ値）。
-  - リポジトリに60日間コミットがないと GitHub がスケジュール実行を自動停止する（警告メール後。Actions タブから再有効化可能）。
+  - **60日ルールへの自己延命**: 公開リポジトリに60日間コミットがないと GitHub が schedule を自動停止する（＝この keep-alive ごと止まる）。ワークフロー実行そのものは「活動」と見なされず、新しいコミットだけがタイマーをリセットするため、同ワークフローの `keepalive` ジョブが最終コミットから45日経過していれば空コミット（`[skip ci]` 付き）を `main` に push して延命する。手動のコミットは不要。
+    - 動作確認: Actions タブから手動実行し `force_keepalive` を true にすると、経過日数に関係なく空コミットを push する。
+    - push が 403 で失敗する場合は Settings → Actions → General → Workflow permissions を "Read and write permissions" にする。
+    - すでに自動停止されてしまった場合は、Actions タブの該当ワークフローで "Enable workflow" を押せば再開する（コミットを1つ積んでも同じ）。
 
 ## Deploy on Vercel
 

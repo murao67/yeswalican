@@ -8,8 +8,8 @@
 # 必要な設定: リポジトリシークレット SUPABASE_ANON_KEY
 #   （値は .env.local / Vercel 環境変数の NEXT_PUBLIC_SUPABASE_ANON_KEY と同じ）
 #
-# 注意: リポジトリに60日間コミットがないと GitHub がスケジュール実行を
-# 自動停止する（事前に警告メールが届き、Actions タブから再有効化できる）。
+# なお GitHub は「60日間コミットがない」公開リポジトリのスケジュール実行を
+# 自動停止するため、この対策自体が止まらないよう keepalive ジョブを併走させる。
 name: Supabase keep-alive
 
 on:
@@ -17,11 +17,18 @@ on:
     # 6時間おき（UTC）。Vercel Cron の 03:00 UTC と時間帯をずらしてある。
     - cron: "17 0,6,12,18 * * *"
   workflow_dispatch:
+    inputs:
+      force_keepalive:
+        description: "経過日数にかかわらず keepalive コミットを push する（動作確認用）"
+        type: boolean
+        default: false
 
 jobs:
   ping:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
     steps:
       - name: Query Supabase REST to generate DB activity
         env:
@@ -37,3 +44,35 @@ jobs:
             -H "apikey: $SUPABASE_ANON_KEY" \
             -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
             -o /dev/null -w "keep-alive HTTP %{http_code}\n"
+
+  # 公開リポジトリで60日間コミットがないと GitHub が schedule を自動停止する
+  # （＝上の ping ごと止まる）。ワークフローが動いたこと自体は「活動」と見なされず、
+  # 新しいコミットだけがタイマーをリセットするため、最終コミットが45日以上前なら
+  # 空コミットを push して延命する。ping の成否と独立させたいので別ジョブ。
+  keepalive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Push an empty commit if the repository has been idle
+        env:
+          # GitHub の停止まで60日。15日の余裕を見て45日で打つ。
+          MAX_IDLE_DAYS: "45"
+          FORCE: ${{ inputs.force_keepalive }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          idle_days=$(( ( $(date -u +%s) - $(git log -1 --format=%ct) ) / 86400 ))
+          echo "最終コミットからの経過日数: ${idle_days}日（しきい値: ${MAX_IDLE_DAYS}日）"
+          if [ "$FORCE" != "true" ] && [ "$idle_days" -lt "$MAX_IDLE_DAYS" ]; then
+            echo "自動停止までまだ猶予があるため何もしない"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # [skip ci] は Vercel に不要な再デプロイをさせないため（60日タイマーには影響しない）。
+          git commit --allow-empty -m "chore: keep GitHub Actions schedule alive [skip ci]"
+          git push origin "HEAD:${BRANCH}"
+          echo "::notice::keepalive コミットを push しました（60日タイマーをリセット）"
